@@ -1,7 +1,10 @@
 import json
+import sys
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from inti.config import settings
 from inti.database import engine, Base
@@ -95,3 +98,12 @@ async def websocket_endpoint(websocket: WebSocket):
             })
     except WebSocketDisconnect:
         pass
+
+
+# Serve PWA static files in production
+frontend_dist = Path(__file__).parent.parent / "frontend-pwa" / "dist"
+if getattr(sys, "frozen", False):
+    frontend_dist = Path(sys._MEIPASS) / "frontend"
+
+if frontend_dist.exists() and (frontend_dist / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")

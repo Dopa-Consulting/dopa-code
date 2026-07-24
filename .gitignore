@@ -5,7 +5,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-*.spec
 venv/
 .venv/
 env/
@@ -50,5 +49,7 @@ logs/
 .opencode/
 .agent-runtime/
 
-# OS
-Desktop.ini
+# Build artifacts
+*.exe
+!.spec
+!install.ps1
