@@ -1,0 +1,17 @@
+{
+  "name": "@dopa-code/agent-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Entorno aislado para el CLI de OpenCode dentro de Dopa Code",
+  "scripts": {
+    "setup": "echo 'OpenCode CLI se instalara en Fase 3'",
+    "agent": "echo 'Ejecucion de agente pendiente de integracion'"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
