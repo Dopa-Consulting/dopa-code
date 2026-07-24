@@ -26,6 +26,7 @@ class Job(Base):
         String(32),
         default="pro_mix",
     )
+    tenant_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     priority: Mapped[str] = mapped_column(String(16), default="normal")
     autonomy_level: Mapped[str] = mapped_column(
         String(32),

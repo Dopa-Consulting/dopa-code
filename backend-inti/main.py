@@ -18,6 +18,8 @@ from inti.models import (  # noqa: F401 - register all models for table creation
     SkillDefinition,
     SkillExecution,
     ProjectKnowledge,
+    Tenant,
+    PaymentIntegration,
 )
 
 

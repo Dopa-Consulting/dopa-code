@@ -52,8 +52,35 @@ class AgentRuntime:
             self._bridge_process.terminate()
             self._bridge_process = None
 
+    async def _inject_erp_context(self, job_id: str, prompt: str) -> str:
+        try:
+            from inti.database import async_session
+            from inti.models.job import Job
+            from sqlalchemy import select
+
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Job).where(Job.id == job_id)
+                )
+                job = result.scalar_one_or_none()
+
+            if job and job.tenant_id:
+                from inti.erp_context import erp_context
+                erp_ctx = await erp_context.build_prompt_context(job.tenant_id)
+                return f"{erp_ctx}\n\n## Tarea\n\n{prompt}"
+
+            from inti.memory import MemoryContext
+            memory_ctx = await MemoryContext.get_context_for_job(
+                job.repo_id if job else None,
+                job.profile if job else "pro_mix",
+            )
+            return f"{memory_ctx}\n\n## Tarea\n\n{prompt}"
+        except Exception:
+            return prompt
+
     async def plan_change(self, job_id: str, prompt: str) -> dict:
         self._audit("llm_architect", "plan_requested", job_id, f"Prompt: {prompt[:200]}")
+        enhanced_prompt = await self._inject_erp_context(job_id, prompt)
         if self.dummy_mode:
             return {
                 "plan": f"[DUMMY] Plan simulado para job {job_id}",
@@ -63,7 +90,7 @@ class AgentRuntime:
             }
         return await self._call_bridge("POST", "/plan", {
             "title": f"Inti Plan {job_id[:8]}",
-            "prompt": prompt,
+            "prompt": enhanced_prompt,
             "directory": str(self.workspace_root),
             "agent": "plan",
         })

@@ -10,6 +10,8 @@ from inti.models.experience_lesson import ExperienceLesson
 from inti.models.skill_definition import SkillDefinition
 from inti.models.skill_execution import SkillExecution
 from inti.models.project_knowledge import ProjectKnowledge
+from inti.models.tenant import Tenant
+from inti.models.payment_integration import PaymentIntegration
 
 __all__ = [
     "Job",
@@ -24,4 +26,6 @@ __all__ = [
     "SkillDefinition",
     "SkillExecution",
     "ProjectKnowledge",
+    "Tenant",
+    "PaymentIntegration",
 ]
