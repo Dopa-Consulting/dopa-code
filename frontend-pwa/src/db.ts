@@ -9,6 +9,8 @@ interface Job {
   branchName: string;
   updatedAt: string;
   lastSyncedAt: string;
+  profile: string;
+  autonomyLevel: string;
 }
 
 interface Diff {
@@ -17,6 +19,7 @@ interface Diff {
   summary: string;
   status: string;
   filesChanged: string[];
+  diffText?: string;
   updatedAt: string;
   lastSyncedAt: string;
 }

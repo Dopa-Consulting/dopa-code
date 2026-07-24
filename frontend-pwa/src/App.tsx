@@ -3,6 +3,7 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Jobs from "./pages/Jobs";
 import DiffViewer from "./pages/DiffViewer";
+import PRViewer from "./pages/PRViewer";
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/jobs" element={<Jobs />} />
         <Route path="/jobs/:jobId/diff" element={<DiffViewer />} />
+        <Route path="/jobs/:jobId/pr" element={<PRViewer />} />
       </Route>
     </Routes>
   );
