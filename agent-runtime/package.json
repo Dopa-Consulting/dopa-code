@@ -1,17 +1,14 @@
 {
   "name": "@dopa-code/agent-runtime",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Entorno aislado para el CLI de OpenCode dentro de Dopa Code",
+  "description": "Entorno aislado para OpenCode CLI y bridge HTTP dentro de Dopa Code",
   "scripts": {
-    "setup": "echo 'OpenCode CLI se instalara en Fase 3'",
-    "agent": "echo 'Ejecucion de agente pendiente de integracion'"
+    "bridge": "bun bridge.js",
+    "setup": "bun install --cwd opencode && bun install",
+    "agent": "echo 'OpenCode CLI via bridge en localhost:4097'"
   },
   "engines": {
     "node": ">=20.0.0"
-  },
-  "main": "index.js",
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  }
 }
