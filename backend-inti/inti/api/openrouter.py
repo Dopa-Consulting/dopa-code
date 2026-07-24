@@ -152,3 +152,55 @@ async def direct_chat(
         max_tokens=256,
     )
     return result
+
+
+# --- Image Generation (Nano Banana via Google AI) ---
+
+
+@router.post("/image/generate")
+async def generate_image(
+    prompt: str,
+    model: str = "nano-banana-2",
+    aspect_ratio: str = "1:1",
+    num_images: int = 1,
+):
+    api_key = multiprovider.providers.get("google") or settings.google_api_key
+    if not api_key:
+        return {"error": "Google API key not configured"}
+
+    if settings.dopa_code_dummy:
+        return {"images": [{"url": f"https://dummy.dopa.dev/img/{i}.png"} for i in range(num_images)], "model": model}
+
+    model_map = {
+        "nano-banana-2": "gemini-3.1-flash-image",
+        "nano-banana-2-lite": "gemini-3.1-flash-lite-image",
+        "nano-banana-pro": "gemini-3-pro-image",
+        "nano-banana": "gemini-2.5-flash-image",
+    }
+    gemini_model = model_map.get(model, "gemini-3.1-flash-image")
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"https://generativelanguage.googleapis.com/v1/models/{gemini_model}:generateContent",
+                params={"key": api_key},
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"responseModalities": ["IMAGE", "TEXT"]},
+                },
+            )
+            if resp.status_code != 200:
+                return {"error": f"Image gen failed ({resp.status_code})", "detail": resp.text[:500]}
+            data = resp.json()
+            images = []
+            for c in data.get("candidates", []):
+                for p in c.get("content", {}).get("parts", []):
+                    if "inlineData" in p:
+                        images.append({"mime_type": p["inlineData"].get("mimeType"), "data_length": len(p["inlineData"].get("data", ""))})
+                    if "text" in p:
+                        images.append({"description": p["text"]})
+            return {"images": images, "model": gemini_model, "prompt": prompt}
+    except Exception as e:
+        return {"error": str(e)}
