@@ -96,7 +96,7 @@ DOPAWEB_SKILLS = [
         "tags_json": json.dumps(["dopaweb", "theme", "section", "safe"]),
     },
     {
-        "name": "dopacrm_backend_safe_refactor",
+        "name": "dopa_backend_safe_refactor",
         "description": "Refactorizar codigo del backend ERP sin romper APIs existentes",
         "steps_json": json.dumps([
             "Identificar el alcance del refactor",
@@ -112,7 +112,7 @@ DOPAWEB_SKILLS = [
             "Facturacion SUNAT es intocable sin doble aprobacion",
             "Correr tests E2E antes de PR",
         ]),
-        "tags_json": json.dumps(["dopacrm", "backend", "refactor", "restricted"]),
+        "tags_json": json.dumps(["dopa", "backend", "refactor", "restricted"]),
     },
 ]
 

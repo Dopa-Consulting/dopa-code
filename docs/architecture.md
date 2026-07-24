@@ -235,10 +235,10 @@ users ──< devices ──< sessions
 
 | Proyecto | Stack | Rol |
 |----------|-------|-----|
-| **DopaCRM** | Node.js 24 + Express + Sequelize + PostgreSQL | Backend ERP multi-tenant: facturacion SUNAT, POS, inventario, inbox WhatsApp/Instagram, AI agents, BYOK |
-| **DopaCRM Frontend** | Vite + React 19 + MUI + ElevenLabs | Dashboard PWA: chat, inbox, POS, billing |
-| **Dopa-ecommerce (DopaWeb)** | Next.js + React | Plataforma ecommerce multi-tenant integrada con DopaCRM |
-| **Dopacrm-landing** | Next.js 16 + React 19 + Stripe + GSAP + Cloudflare | Landing page de conversion |
+| **Dopa** | Node.js 24 + Express + Sequelize + PostgreSQL | ERP agentico multi-tenant: facturacion SUNAT, POS, inventario, inbox omnicanal, AI agents, BYOK |
+| **Dopa Frontend** | Vite + React 19 + MUI + ElevenLabs | Dashboard PWA: chat, inbox, POS, billing |
+| **DopaWeb** | Next.js + React | Plataforma ecommerce multi-tenant integrada con Dopa |
+| **Dopa Academy** | Web | Capacitacion y formacion en el ecosistema |
 | **Dopa Code** | FastAPI + React + Node bridge + OpenCode | Constructor agentico nativo del ecosistema |
 
 ### Dopa Code como constructor agentico de DopaWeb
@@ -266,7 +266,7 @@ En lugar de un builder visual tipo Elementor, Dopa Code es el "constructor invis
     │ Branch aislada por job
     │
     ▼
-[ DopaCRM / ERP ]
+[ Dopa / ERP ]
     │ APIs de productos, categorias, facturacion
     │ Integraciones de pago via BYOK
     │ Webhooks de CI/CD → n8n → Easypanel
@@ -290,11 +290,10 @@ Cada job se asigna a un tipo de proyecto del ecosistema:
 
 | project_type | Descripcion | Autonomia default |
 |-------------|-------------|-------------------|
-| `dopacrm_backend` | Modificaciones al ERP core | human_gatekeeper |
-| `dopacrm_frontend` | Dashboard y UI del CRM | plan_and_pr_only |
+| `dopa_backend` | Modificaciones al ERP core | human_gatekeeper |
+| `dopa_frontend` | Dashboard y UI del ERP | plan_and_pr_only |
 | `dopaweb_theme` | Personalizacion de templates ecommerce | auto_merge_staging |
 | `dopaweb_payment` | Integracion BYOK de PSPs | human_gatekeeper |
-| `dopacrm_landing` | Landing page y marketing | auto_merge_staging |
 | `dopa_code` | Desarrollo del propio Dopa Code | human_gatekeeper |
 
 ---

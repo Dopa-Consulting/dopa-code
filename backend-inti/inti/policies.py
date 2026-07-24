@@ -15,23 +15,22 @@ TaskProfile = Literal[
 ]
 
 ProjectType = Literal[
-    "dopacrm_backend",
-    "dopacrm_frontend",
+    "dopa_backend",
+    "dopa_frontend",
     "dopaweb_theme",
     "dopaweb_payment",
-    "dopacrm_landing",
     "dopa_code",
 ]
 
 PROJECT_TYPE_DEFAULTS: dict[ProjectType, dict] = {
-    "dopacrm_backend": {
+    "dopa_backend": {
         "autonomy": "human_gatekeeper",
         "description": "Modificaciones al ERP core (backend Express + Sequelize + PostgreSQL)",
         "allowlist_extra": ["tsx", "vitest", "sequelize"],
     },
-    "dopacrm_frontend": {
+    "dopa_frontend": {
         "autonomy": "plan_and_pr_only",
-        "description": "Dashboard PWA del CRM (Vite + React + MUI)",
+        "description": "Dashboard PWA del ERP (Vite + React + MUI)",
         "allowlist_extra": ["vite", "playwright"],
     },
     "dopaweb_theme": {
@@ -53,11 +52,6 @@ PROJECT_TYPE_DEFAULTS: dict[ProjectType, dict] = {
         "skills_preset": [
             "add_payment_method_byok",
         ],
-    },
-    "dopacrm_landing": {
-        "autonomy": "auto_merge_staging",
-        "description": "Landing page y marketing (Next.js 16 + GSAP + Stripe + Cloudflare)",
-        "allowlist_extra": ["next", "opennextjs-cloudflare"],
     },
     "dopa_code": {
         "autonomy": "human_gatekeeper",

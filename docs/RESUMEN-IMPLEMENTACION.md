@@ -48,7 +48,7 @@ guardrails.py        — 8 reglas de proteccion ERP (block/warn/info)
 skills_seeder.py     — 6 skills predefinidas para DopaWeb
 template_service.py  — bridge de repos de templates
 payment_service.py   — BYOK payment integration con contexto ERP
-erp_context.py       — schemas + reglas de negocio desde DopaCRM
+erp_context.py       — schemas + reglas de negocio desde Dopa
 openrouter_client.py — cliente directo OpenRouter + MultiProviderClient
 tenant_resolver.py   — resolucion multi-tenant (workspace path, ERP endpoint)
 ```
@@ -91,7 +91,7 @@ tenant_resolver.py   — resolucion multi-tenant (workspace path, ERP endpoint)
 | Modelos | Propios | **BYOK**: OpenRouter + APIs directas |
 | Memoria | Sesion | **Persistente**: PostMortem + skills auto-mejorables |
 | Seguridad | Cloud | **Local**: guardrails, allowlist, workspace jail |
-| ERP/Ecommerce | No | **Nativo**: DopaCRM + DopaWeb |
+| ERP/Ecommerce | No | **Nativo**: Dopa + DopaWeb |
 | Monetizacion | $20/mes suscripcion | Open-core: community gratis, pro/enterprise pago |
 | Precio LLM | Fijo | **Vos elegis**: gratis (Gemma), barato (DeepSeek), premium (Opus) |
 

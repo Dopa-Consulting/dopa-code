@@ -10,9 +10,9 @@ Dopa Code es parte del ecosistema Dopa pero funciona con cualquier proyecto:
 
 | Proyecto | Stack | Rol |
 |----------|-------|-----|
-| **DopaCRM** | Node.js 24 + Express + Sequelize + PostgreSQL | ERP multi-tenant: facturacion SUNAT, POS, inventario, inbox, AI agents |
-| **DopaWeb** | Next.js + React | Ecommerce multi-tenant integrado nativamente con DopaCRM |
-| **Dopacrm-landing** | Next.js 16 + GSAP + Stripe + Cloudflare | Landing page |
+| **Dopa** | Node.js 24 + Express + Sequelize + PostgreSQL | ERP agentico multi-tenant: facturacion SUNAT, POS, inventario, inbox omnicanal, AI agents, BYOK |
+| **DopaWeb** | Next.js + React | Ecommerce multi-tenant integrado nativamente con Dopa |
+| **Dopa Academy** | Web | Capacitacion y formacion en el ecosistema Dopa |
 | **Dopa Code** | FastAPI + React + Node bridge + OpenCode | Orquestador agentico general |
 
 **Integracion nativa con DopaWeb**: templates funcionales + BYOK payments + ERP context. Pero tambien funciona con tu proyecto personal, tu startup, o cualquier repo Git.
@@ -172,7 +172,7 @@ El core de Dopa Code es MIT. Estrategias de monetizacion planeadas:
 | **Enterprise** | SSO, SLA, on-premise deployment, training, custom integrations | A medida |
 
 **Servicios adicionales:**
-- Consultoria: integracion DopaWeb + DopaCRM + Dopa Code
+- Consultoria: integracion DopaWeb + Dopa + Dopa Code
 - Skills marketplace: skills verificadas por la comunidad
 - Templates premium: temas avanzados para DopaWeb
 - Capacitacion via Dopa Academy

@@ -90,7 +90,7 @@ DOPAWEB_GUARDRAILS = GuardrailProfile(
             severity="block",
             pattern="src/lib/facturacion/",
             description="No modificar modulo de facturacion",
-            message="El modulo de facturacion SUNAT no puede ser modificado. Usa el job type 'dopacrm_backend' si necesitas cambios en facturacion.",
+            message="El modulo de facturacion SUNAT no puede ser modificado. Usa el job type 'dopa_backend' si necesitas cambios en facturacion.",
         ),
         GuardrailRule(
             id="keep-erp-imports",
