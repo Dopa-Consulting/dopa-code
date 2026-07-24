@@ -14,6 +14,48 @@ TaskProfile = Literal[
     "premium",
 ]
 
+ProjectType = Literal[
+    "dopacrm_backend",
+    "dopacrm_frontend",
+    "dopaweb_theme",
+    "dopaweb_payment",
+    "dopacrm_landing",
+    "dopa_code",
+]
+
+PROJECT_TYPE_DEFAULTS: dict[ProjectType, dict] = {
+    "dopacrm_backend": {
+        "autonomy": "human_gatekeeper",
+        "description": "Modificaciones al ERP core (backend Express + Sequelize + PostgreSQL)",
+        "allowlist_extra": ["tsx", "vitest", "sequelize"],
+    },
+    "dopacrm_frontend": {
+        "autonomy": "plan_and_pr_only",
+        "description": "Dashboard PWA del CRM (Vite + React + MUI)",
+        "allowlist_extra": ["vite", "playwright"],
+    },
+    "dopaweb_theme": {
+        "autonomy": "auto_merge_staging",
+        "description": "Personalizacion de templates ecommerce (Next.js + React)",
+        "allowlist_extra": ["next"],
+    },
+    "dopaweb_payment": {
+        "autonomy": "human_gatekeeper",
+        "description": "Integracion BYOK de PSPs (Stripe, MercadoPago, PayPal, etc.)",
+        "allowlist_extra": [],
+    },
+    "dopacrm_landing": {
+        "autonomy": "auto_merge_staging",
+        "description": "Landing page y marketing (Next.js 16 + GSAP + Stripe + Cloudflare)",
+        "allowlist_extra": ["next", "opennextjs-cloudflare"],
+    },
+    "dopa_code": {
+        "autonomy": "human_gatekeeper",
+        "description": "Desarrollo del propio Dopa Code (FastAPI + React + Node bridge)",
+        "allowlist_extra": ["uvicorn", "bun"],
+    },
+}
+
 StepType = Literal[
     "planner",
     "executor",

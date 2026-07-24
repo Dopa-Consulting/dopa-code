@@ -229,13 +229,84 @@ users ──< devices ──< sessions
 
 ---
 
+## Integracion con el Ecosistema Dopa
+
+### Proyectos del ecosistema
+
+| Proyecto | Stack | Rol |
+|----------|-------|-----|
+| **DopaCRM** | Node.js 24 + Express + Sequelize + PostgreSQL | Backend ERP multi-tenant: facturacion SUNAT, POS, inventario, inbox WhatsApp/Instagram, AI agents, BYOK |
+| **DopaCRM Frontend** | Vite + React 19 + MUI + ElevenLabs | Dashboard PWA: chat, inbox, POS, billing |
+| **Dopa-ecommerce (DopaWeb)** | Next.js + React | Plataforma ecommerce multi-tenant integrada con DopaCRM |
+| **Dopacrm-landing** | Next.js 16 + React 19 + Stripe + GSAP + Cloudflare | Landing page de conversion |
+| **Dopa Code** | FastAPI + React + Node bridge + OpenCode | Constructor agentico nativo del ecosistema |
+
+### Dopa Code como constructor agentico de DopaWeb
+
+En lugar de un builder visual tipo Elementor, Dopa Code es el "constructor invisible" de DopaWeb:
+
+```
+[ Cliente DopaWeb ]
+    │
+    │ Crea tienda + elige template funcional
+    │ Templates integrados con Dopa ERP (catalogo, checkout, facturacion)
+    │
+    ▼
+[ Dopa Code / Inti ] ──── PWA movil
+    │
+    │ "Cambiar layout de pagina de producto"
+    │ "Agregar metodo de pago BYOK (Stripe, MercadoPago)"
+    │ "Ajustar branding segun guia de marca"
+    │
+    ▼
+[ Pipeline agentico ]
+    Planner → Executor (OpenCode) → QA → CI → Aprobacion humana → Deploy
+    │
+    │ Opera sobre el repositorio del tema de la tienda
+    │ Branch aislada por job
+    │
+    ▼
+[ DopaCRM / ERP ]
+    │ APIs de productos, categorias, facturacion
+    │ Integraciones de pago via BYOK
+    │ Webhooks de CI/CD → n8n → Easypanel
+```
+
+### BYOK Payment Integration
+
+Dopa Code permite integrar metodos de pago externos (Stripe, PayPal, MercadoPago, Culqi, etc.) sin plugins:
+
+1. El cliente registra sus credenciales del PSP en DopaWeb
+2. Inti crea un job `integrate_psp` con contexto del tenant
+3. Architect LLM evalua docs del PSP y genera plan de integracion
+4. Executor implementa: checkout, webhooks, mapping a Dopa ERP
+5. QA verifica flujos en sandbox del PSP
+6. CI ejecuta tests de integracion
+7. Aprobacion y deploy desde la PWA
+
+### Project Types en policies.py
+
+Cada job se asigna a un tipo de proyecto del ecosistema:
+
+| project_type | Descripcion | Autonomia default |
+|-------------|-------------|-------------------|
+| `dopacrm_backend` | Modificaciones al ERP core | human_gatekeeper |
+| `dopacrm_frontend` | Dashboard y UI del CRM | plan_and_pr_only |
+| `dopaweb_theme` | Personalizacion de templates ecommerce | auto_merge_staging |
+| `dopaweb_payment` | Integracion BYOK de PSPs | human_gatekeeper |
+| `dopacrm_landing` | Landing page y marketing | auto_merge_staging |
+| `dopa_code` | Desarrollo del propio Dopa Code | human_gatekeeper |
+
+---
+
 ## Roadmap
 
 | Fase | Estado |
 |------|--------|
 | 1. Inicializacion del Workspace | Completed |
-| 2. Arquitectura core (modelos, AgentRuntime, politicas, eventos, auditoria) | In Progress |
-| 3. Integracion OpenCode + extraccion de diffs | Pending |
-| 4. PWA offline-first + WebSockets + Visor de PRs | Pending |
-| 5. Seguridad (Tailscale, WebAuthn) + CI/CD (n8n) | Pending |
-| 6. Empaquetado final (PyInstaller) | Pending |
+| 2. Arquitectura core (modelos, AgentRuntime, politicas, eventos, auditoria, memoria) | Completed |
+| 3. Integracion OpenCode CLI via bridge HTTP | Completed |
+| 4. PWA offline-first + WebSockets + Visor de Diffs/PRs | Pending |
+| 5. Seguridad (Tailscale, WebAuthn) + CI/CD (n8n + Easypanel) | Pending |
+| 6. Integracion DopaWeb (templates, BYOK payments, agentes por tenant) | Pending |
+| 7. Empaquetado final (PyInstaller + Windows Service) | Pending |
