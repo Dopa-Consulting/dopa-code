@@ -8,6 +8,7 @@ import {
   type Diff,
 } from "../services/sync";
 import useDeploy from "../hooks/useDeploy";
+import useWebAuthn from "../hooks/useWebAuthn";
 
 const DIFF_COLORS: Record<string, string> = {
   generated: "bg-blue-500/20 text-blue-400",
@@ -32,6 +33,7 @@ export default function DiffViewer() {
   const [diffs, setDiffs] = useState<Diff[]>([]);
   const [actionStatus, setActionStatus] = useState<"idle" | "sending" | "sent" | "offline">("idle");
   const { ciStatus, deploy, merge, setEasyPanelToken } = useDeploy(jobId || "");
+  const { isAvailable: webauthnAvailable, authenticate } = useWebAuthn();
 
   useEffect(() => {
     if (!jobId) return;
@@ -45,6 +47,10 @@ export default function DiffViewer() {
 
   const handleApprove = async () => {
     if (!jobId) return;
+    if (webauthnAvailable) {
+      const auth = await authenticate();
+      if (!auth?.verified) return;
+    }
     setActionStatus("sending");
     const ok = await approveJob(jobId);
     setActionStatus(ok ? "sent" : "offline");
@@ -58,11 +64,19 @@ export default function DiffViewer() {
   };
 
   const handleDeploy = async () => {
+    if (webauthnAvailable) {
+      const auth = await authenticate();
+      if (!auth?.verified) return;
+    }
     const result = await deploy("production");
     if (result && !result.error) setActionStatus("sent");
   };
 
   const handleMerge = async () => {
+    if (webauthnAvailable) {
+      const auth = await authenticate();
+      if (!auth?.verified) return;
+    }
     const result = await merge();
     if (result && !result.error) setActionStatus("sent");
   };
@@ -143,7 +157,14 @@ export default function DiffViewer() {
       </div>
 
       <div className="rounded-lg bg-slate-900 border border-slate-800 p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-slate-300">Acciones de despliegue</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-300">Acciones de despliegue</h3>
+          {webauthnAvailable && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+              FaceID
+            </span>
+          )}
+        </div>
         <div className="flex gap-3">
           <button onClick={handleMerge} disabled={ciStatus !== "passed"}
             className="flex-1 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold py-2 px-3 transition-colors text-sm"

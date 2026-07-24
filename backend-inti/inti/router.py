@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from inti.api import health, jobs, devices, audit, events, memory
-from inti.api import tenants, templates, payments, openrouter
+from inti.api import tenants, templates, payments, openrouter, webauthn, voice
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(health.router, tags=["health"])
@@ -14,3 +14,5 @@ api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(templates.router, prefix="/templates", tags=["templates"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(openrouter.router, prefix="/openrouter", tags=["openrouter"])
+api_router.include_router(webauthn.router, prefix="/webauthn", tags=["webauthn"])
+api_router.include_router(voice.router, prefix="/voice", tags=["voice"])
