@@ -102,3 +102,47 @@ class ErpContext:
 
 
 erp_context = ErpContext()
+
+
+async def verify_erp_integration_post_change(
+    tenant_id: str, files_changed: list[str]
+) -> dict:
+    if settings.dopa_code_dummy:
+        return {"passed": True, "message": "[DUMMY] Post-change verification skipped"}
+
+    protected_patterns = [
+        "facturacion",
+        "invoice",
+        "tax-calculator",
+        "useCheckout",
+        "erp-client",
+        "webhooks",
+    ]
+
+    touched_protected = []
+    for file_path in files_changed:
+        for pattern in protected_patterns:
+            if pattern in file_path:
+                touched_protected.append({"file": file_path, "pattern": pattern})
+
+    if touched_protected:
+        logger = logging.getLogger("inti.erp")
+        logger.warning(
+            f"Post-change: archivos protegidos modificados en tenant {tenant_id}: "
+            f"{touched_protected}"
+        )
+        return {
+            "passed": False,
+            "violations": [
+                {
+                    "file": tp["file"],
+                    "message": f"Archivo protegido '{tp['pattern']}' fue modificado. "
+                    f"Revisar integracion ERP.",
+                }
+                for tp in touched_protected
+            ],
+            "action_required": "Verificar manualmente que la integracion ERP sigue funcionando",
+        }
+
+    logger.info(f"Post-change verification passed for tenant {tenant_id}")
+    return {"passed": True, "message": "No se detectaron cambios en archivos protegidos del ERP"}

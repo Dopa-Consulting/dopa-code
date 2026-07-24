@@ -38,11 +38,21 @@ PROJECT_TYPE_DEFAULTS: dict[ProjectType, dict] = {
         "autonomy": "auto_merge_staging",
         "description": "Personalizacion de templates ecommerce (Next.js + React)",
         "allowlist_extra": ["next"],
+        "erp_guardrails": True,
+        "skills_preset": [
+            "customize_product_page",
+            "customize_branding",
+            "add_custom_section",
+        ],
     },
     "dopaweb_payment": {
         "autonomy": "human_gatekeeper",
         "description": "Integracion BYOK de PSPs (Stripe, MercadoPago, PayPal, etc.)",
         "allowlist_extra": [],
+        "erp_guardrails": True,
+        "skills_preset": [
+            "add_payment_method_byok",
+        ],
     },
     "dopacrm_landing": {
         "autonomy": "auto_merge_staging",

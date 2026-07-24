@@ -64,17 +64,30 @@ class AgentRuntime:
                 )
                 job = result.scalar_one_or_none()
 
+            context_parts = []
+
             if job and job.tenant_id:
                 from inti.erp_context import erp_context
                 erp_ctx = await erp_context.build_prompt_context(job.tenant_id)
-                return f"{erp_ctx}\n\n## Tarea\n\n{prompt}"
+                context_parts.append(erp_ctx)
 
-            from inti.memory import MemoryContext
-            memory_ctx = await MemoryContext.get_context_for_job(
-                job.repo_id if job else None,
-                job.profile if job else "pro_mix",
-            )
-            return f"{memory_ctx}\n\n## Tarea\n\n{prompt}"
+            if job:
+                from inti.guardrails import guardrail_engine
+                guardrail_prompt = guardrail_engine.build_system_prompt(
+                    job.profile if job.profile in ("dopaweb_theme", "dopaweb_payment") else "dopaweb_theme"
+                )
+                if guardrail_prompt:
+                    context_parts.append(guardrail_prompt)
+
+                from inti.memory import MemoryContext
+                memory_ctx = await MemoryContext.get_context_for_job(
+                    job.repo_id, job.profile
+                )
+                if memory_ctx and "[DUMMY]" not in memory_ctx:
+                    context_parts.append(memory_ctx)
+
+            context = "\n\n".join(context_parts) if context_parts else ""
+            return f"{context}\n\n## Tarea\n\n{prompt}" if context else prompt
         except Exception:
             return prompt
 
@@ -143,6 +156,17 @@ class AgentRuntime:
 
     async def run_qa_review(self, job_id: str, diff_text: str) -> dict:
         self._audit("llm_qa", "qa_review_started", job_id, "Reviewing diff")
+
+        guardrail_result = await self._validate_guardrails(job_id, diff_text, [])
+        if not guardrail_result.get("passed", True):
+            return {
+                "passed": False,
+                "score": 0.0,
+                "issues": guardrail_result.get("violations", []),
+                "blocked_by_guardrails": True,
+                "message": "Diff bloqueado por guardrails. Archivos protegidos modificados.",
+            }
+
         if self.dummy_mode:
             return {"passed": True, "score": 0.92, "issues": [], "model": settings.qa_model}
         return await self._call_bridge("POST", "/execute", {
@@ -184,6 +208,43 @@ class AgentRuntime:
             job_id=job_id,
             summary=summary,
         )
+
+    async def _validate_guardrails(
+        self, job_id: str, diff_text: str, files_changed: list[str]
+    ) -> dict:
+        try:
+            from inti.database import async_session
+            from inti.models.job import Job
+            from sqlalchemy import select
+            from inti.guardrails import guardrail_engine
+
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Job).where(Job.id == job_id)
+                )
+                job = result.scalar_one_or_none()
+
+            if not job:
+                return {"passed": True}
+
+            project_type = job.profile
+            if project_type not in ("dopaweb_theme", "dopaweb_payment"):
+                return {"passed": True}
+
+            if not files_changed and diff_text:
+                files_changed = [
+                    line[6:] for line in diff_text.split("\n")
+                    if line.startswith("--- a/") or line.startswith("+++ b/")
+                ]
+                files_changed = list(set(
+                    f.split("\t")[0] for f in files_changed
+                ))
+
+            return guardrail_engine.validate_diff(project_type, diff_text, files_changed)
+        except Exception as e:
+            logger = __import__("logging").getLogger("inti.agent_runtime")
+            logger.warning(f"Guardrail validation failed: {e}")
+            return {"passed": True, "warning": str(e)}
 
 
 agent_runtime = AgentRuntime()
