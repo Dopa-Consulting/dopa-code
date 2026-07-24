@@ -7,7 +7,9 @@ export default function Layout() {
         <h1 className="text-lg font-bold tracking-tight">
           <span className="text-amber-400">Dopa</span> Code
         </h1>
-        <span className="text-xs text-slate-500">Inti</span>
+        <NavLink to="/models" className="text-xs text-slate-500 hover:text-amber-400 transition-colors">
+          OpenRouter
+        </NavLink>
       </header>
 
       <main className="flex-1 overflow-auto px-4 py-4">
@@ -18,6 +20,7 @@ export default function Layout() {
         {[
           { to: "/", label: "Dashboard", icon: "=" },
           { to: "/jobs", label: "Jobs", icon: "[]" },
+          { to: "/models", label: "Modelos", icon: "AI" },
         ].map(({ to, label, icon }) => (
           <NavLink
             key={to}
