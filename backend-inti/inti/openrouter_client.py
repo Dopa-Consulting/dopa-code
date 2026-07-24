@@ -22,6 +22,7 @@ OPENROUTER_MODELS = {
             "completion": 75.00,
         },
         "capabilities": ["reasoning", "code", "architecture", "planning"],
+        "free": False,
     },
     "anthropic/claude-sonnet-5": {
         "name": "Claude Sonnet 5",
@@ -33,6 +34,7 @@ OPENROUTER_MODELS = {
             "completion": 15.00,
         },
         "capabilities": ["code", "reasoning", "fast"],
+        "free": False,
     },
     "deepseek/deepseek-chat": {
         "name": "DeepSeek V4",
@@ -44,6 +46,7 @@ OPENROUTER_MODELS = {
             "completion": 0.28,
         },
         "capabilities": ["code", "fast", "cheap"],
+        "free": False,
     },
     "deepseek/deepseek-r1": {
         "name": "DeepSeek R1",
@@ -55,6 +58,7 @@ OPENROUTER_MODELS = {
             "completion": 2.19,
         },
         "capabilities": ["reasoning", "code", "math"],
+        "free": False,
     },
     "google/gemini-2.5-flash": {
         "name": "Gemini 2.5 Flash",
@@ -66,6 +70,7 @@ OPENROUTER_MODELS = {
             "completion": 0.60,
         },
         "capabilities": ["code", "multimodal", "fast", "cheap"],
+        "free": False,
     },
     "google/gemini-2.5-pro": {
         "name": "Gemini 2.5 Pro",
@@ -77,6 +82,7 @@ OPENROUTER_MODELS = {
             "completion": 10.00,
         },
         "capabilities": ["reasoning", "code", "multimodal"],
+        "free": False,
     },
     "openai/gpt-4.1": {
         "name": "GPT-4.1",
@@ -88,6 +94,7 @@ OPENROUTER_MODELS = {
             "completion": 8.00,
         },
         "capabilities": ["code", "reasoning", "general"],
+        "free": False,
     },
     "meta-llama/llama-4-maverick": {
         "name": "Llama 4 Maverick",
@@ -99,6 +106,44 @@ OPENROUTER_MODELS = {
             "completion": 0.90,
         },
         "capabilities": ["code", "general", "open"],
+        "free": False,
+    },
+    # --- Modelos GRATUITOS via OpenRouter ---
+    "google/gemma-3-27b-it": {
+        "name": "Gemma 3 27B (FREE)",
+        "provider": "Google",
+        "context_length": 8192,
+        "max_output": 8192,
+        "pricing": {"prompt": 0, "completion": 0},
+        "capabilities": ["free", "code", "general"],
+        "free": True,
+    },
+    "meta-llama/llama-4-scout": {
+        "name": "Llama 4 Scout (FREE)",
+        "provider": "Meta",
+        "context_length": 131072,
+        "max_output": 8192,
+        "pricing": {"prompt": 0, "completion": 0},
+        "capabilities": ["free", "code", "open"],
+        "free": True,
+    },
+    "mistralai/mistral-small-3.1-24b": {
+        "name": "Mistral Small 3.1 (FREE)",
+        "provider": "Mistral",
+        "context_length": 32768,
+        "max_output": 8192,
+        "pricing": {"prompt": 0, "completion": 0},
+        "capabilities": ["free", "code", "fast"],
+        "free": True,
+    },
+    "qwen/qwen-3-30b-a3b": {
+        "name": "Qwen 3 30B (FREE)",
+        "provider": "Qwen",
+        "context_length": 32768,
+        "max_output": 8192,
+        "pricing": {"prompt": 0, "completion": 0},
+        "capabilities": ["free", "code", "cheap"],
+        "free": True,
     },
 }
 
@@ -295,3 +340,173 @@ class OpenRouterClient:
 
 
 openrouter = OpenRouterClient()
+
+
+# --- Multi-Provider: APIs directas sin OpenRouter (BYOK puro) ---
+
+PROVIDER_ENDPOINTS = {
+    "openai": "https://api.openai.com/v1/chat/completions",
+    "anthropic": "https://api.anthropic.com/v1/messages",
+    "deepseek": "https://api.deepseek.com/v1/chat/completions",
+    "google": "https://generativelanguage.googleapis.com/v1/models/{model}:generateContent",
+    "groq": "https://api.groq.com/openai/v1/chat/completions",
+}
+
+
+class MultiProviderClient:
+    def __init__(self):
+        self.providers: dict[str, str] = {}
+
+    def configure(self, provider: str, api_key: str) -> None:
+        self.providers[provider] = api_key
+
+    def is_configured(self, provider: str) -> bool:
+        return bool(self.providers.get(provider))
+
+    async def chat(
+        self, provider: str, model: str, messages: list[dict], max_tokens: int = 8000
+    ) -> dict:
+        api_key = self.providers.get(provider) or getattr(settings, f"{provider}_api_key", "")
+
+        if not api_key:
+            return {"error": f"API key for {provider} not configured."}
+
+        if settings.dopa_code_dummy:
+            return {
+                "content": f"[DUMMY] {provider}/{model} response",
+                "model": model,
+                "usage": {"total_tokens": 100},
+            }
+
+        endpoint = PROVIDER_ENDPOINTS.get(provider)
+        if not endpoint:
+            return {"error": f"Unknown provider: {provider}"}
+
+        if provider == "deepseek":
+            return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens)
+        elif provider == "openai":
+            return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens)
+        elif provider == "groq":
+            return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens)
+        elif provider == "anthropic":
+            return await self._chat_anthropic(api_key, endpoint, model, messages, max_tokens)
+        elif provider == "google":
+            return await self._chat_google(api_key, endpoint, model, messages, max_tokens)
+        else:
+            return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens)
+
+    async def _chat_openai_compat(
+        self, api_key: str, endpoint: str, model: str, messages: list[dict], max_tokens: int
+    ) -> dict:
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    endpoint,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": model,
+                        "messages": messages,
+                        "max_tokens": max_tokens,
+                    },
+                )
+                if resp.status_code != 200:
+                    return {"error": f"API error {resp.status_code}", "detail": resp.text[:500]}
+                data = resp.json()
+                choice = data.get("choices", [{}])[0]
+                usage = data.get("usage", {})
+                return {
+                    "model": data.get("model", model),
+                    "content": choice.get("message", {}).get("content", ""),
+                    "usage": {
+                        "prompt_tokens": usage.get("prompt_tokens", 0),
+                        "completion_tokens": usage.get("completion_tokens", 0),
+                        "total_tokens": usage.get("total_tokens", 0),
+                    },
+                }
+        except Exception as e:
+            return {"error": str(e)}
+
+    async def _chat_anthropic(
+        self, api_key: str, endpoint: str, model: str, messages: list[dict], max_tokens: int
+    ) -> dict:
+        try:
+            system_msg = next((m["content"] for m in messages if m["role"] == "system"), None)
+            user_msgs = [m for m in messages if m["role"] != "system"]
+
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    endpoint,
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": model,
+                        "system": system_msg,
+                        "messages": user_msgs,
+                        "max_tokens": max_tokens,
+                    },
+                )
+                if resp.status_code != 200:
+                    return {"error": f"Anthropic error {resp.status_code}", "detail": resp.text[:500]}
+                data = resp.json()
+                content_block = data.get("content", [{}])[0]
+                usage = data.get("usage", {})
+                return {
+                    "model": data.get("model", model),
+                    "content": content_block.get("text", ""),
+                    "usage": {
+                        "prompt_tokens": usage.get("input_tokens", 0),
+                        "completion_tokens": usage.get("output_tokens", 0),
+                        "total_tokens": usage.get("input_tokens", 0) + usage.get("output_tokens", 0),
+                    },
+                }
+        except Exception as e:
+            return {"error": str(e)}
+
+    async def _chat_google(
+        self, api_key: str, endpoint: str, model: str, messages: list[dict], max_tokens: int
+    ) -> dict:
+        try:
+            url = endpoint.replace("{model}", model)
+            contents = []
+            for m in messages:
+                role = "user" if m["role"] in ("user", "system") else "model"
+                contents.append({
+                    "role": role,
+                    "parts": [{"text": str(m["content"])}],
+                })
+
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    f"{url}?key={api_key}",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "contents": contents,
+                        "generationConfig": {"maxOutputTokens": max_tokens},
+                    },
+                )
+                if resp.status_code != 200:
+                    return {"error": f"Google error {resp.status_code}", "detail": resp.text[:500]}
+                data = resp.json()
+                candidates = data.get("candidates", [{}])
+                content_parts = candidates[0].get("content", {}).get("parts", [{}])
+                usage = data.get("usageMetadata", {})
+                return {
+                    "model": model,
+                    "content": content_parts[0].get("text", ""),
+                    "usage": {
+                        "prompt_tokens": usage.get("promptTokenCount", 0),
+                        "completion_tokens": usage.get("candidatesTokenCount", 0),
+                        "total_tokens": usage.get("totalTokenCount", 0),
+                    },
+                }
+        except Exception as e:
+            return {"error": str(e)}
+
+
+multiprovider = MultiProviderClient()

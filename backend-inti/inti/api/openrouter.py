@@ -109,3 +109,45 @@ async def estimate_cost(
         "completion_tokens": completion_tokens,
         "cost": cost,
     }
+
+
+# --- Multi-Provider Direct APIs ---
+
+from inti.openrouter_client import multiprovider, PROVIDER_ENDPOINTS
+
+
+@router.post("/provider/config")
+async def configure_provider(provider: str, api_key: str):
+    if provider not in PROVIDER_ENDPOINTS:
+        return {"error": f"Provider no soportado: {provider}. Usa: {list(PROVIDER_ENDPOINTS.keys())}"}
+    multiprovider.configure(provider, api_key)
+    return {"status": "ok", "provider": provider, "message": f"API key configurada para {provider}"}
+
+
+@router.get("/provider/status")
+async def provider_status():
+    return {
+        "providers": [
+            {
+                "name": p,
+                "endpoint": PROVIDER_ENDPOINTS[p],
+                "configured": multiprovider.is_configured(p),
+            }
+            for p in PROVIDER_ENDPOINTS
+        ]
+    }
+
+
+@router.post("/provider/chat")
+async def direct_chat(
+    provider: str = "deepseek",
+    model: str = "deepseek-chat",
+    prompt: str = "Say hello in one sentence.",
+):
+    result = await multiprovider.chat(
+        provider=provider,
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=256,
+    )
+    return result

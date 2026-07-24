@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     antigravity_api_key: str = ""
 
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    deepseek_api_key: str = ""
+    google_api_key: str = ""
+    groq_api_key: str = ""
+
     architect_model: str = "anthropic/claude-opus-4-8"
     executor_model: str = "deepseek/deepseek-chat"
     qa_model: str = "antigravity"
