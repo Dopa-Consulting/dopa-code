@@ -219,3 +219,101 @@ async def list_diffs(job_id: str, db: AsyncSession = Depends(get_db)):
         ],
         "total": len(diffs),
     }
+
+
+@router.post("/{job_id}/deploy")
+async def deploy_job(
+    job_id: str,
+    environment: str = "production",
+    triggered_by: str = "human",
+):
+    from inti.deploy import DeployService
+
+    result = await DeployService.trigger_deploy(
+        job_id=job_id,
+        environment=environment,
+        triggered_by=triggered_by,
+    )
+    return result
+
+
+@router.post("/{job_id}/merge")
+async def merge_job(
+    job_id: str,
+    merge_method: str = "merge",
+    device_id: str = "",
+):
+    from inti.deploy import DeployService
+
+    result = await DeployService.merge_pr(
+        job_id=job_id,
+        merge_method=merge_method,
+        triggered_by="human",
+        device_id=device_id,
+    )
+    return result
+
+
+@router.get("/{job_id}/ci-status")
+async def get_ci_status(job_id: str, db: AsyncSession = Depends(get_db)):
+    from inti.models.ci_run import CiRun
+    from sqlalchemy import select as sa_select
+
+    result = await db.execute(
+        sa_select(CiRun)
+        .where(CiRun.job_id == job_id)
+        .order_by(CiRun.created_at.desc())
+        .limit(5)
+    )
+    runs = result.scalars().all()
+    return {
+        "ci_runs": [
+            {
+                "id": r.id,
+                "status": r.status,
+                "provider": r.ci_provider,
+                "run_id": r.run_id,
+                "logs_url": r.logs_url,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+            }
+            for r in runs
+        ],
+        "total": len(runs),
+    }
+
+
+@router.post("/ci-webhook")
+async def ci_webhook(
+    job_id: str,
+    status: str,
+    provider: str = "github_actions",
+    run_id: str | None = None,
+    logs_url: str | None = None,
+):
+    from inti.deploy import DeployService
+
+    result = await DeployService.ci_webhook(
+        job_id=job_id,
+        status=status,
+        provider=provider,
+        run_id=run_id,
+        logs_url=logs_url,
+    )
+    return result
+
+
+@router.post("/deploy-token")
+async def set_deploy_token(
+    project_id: str,
+    token: str,
+    endpoint: str | None = None,
+):
+    from inti.deploy import DeployService
+
+    result = await DeployService.set_deploy_token(
+        project_id=project_id,
+        token=token,
+        endpoint=endpoint,
+    )
+    return result

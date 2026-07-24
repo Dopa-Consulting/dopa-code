@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     executor_model: str = "deepseek/deepseek-chat"
     qa_model: str = "antigravity"
 
+    easypanel_deploy_token: str = ""
+    easypanel_endpoint: str = "https://easypanel.io"
+
     model_config = {"env_prefix": "DOPA_", "env_file": ".env"}
 
 
