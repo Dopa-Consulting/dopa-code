@@ -44,6 +44,13 @@ async def lifespan(app: FastAPI):
     print(banner)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Load persisted provider keys on startup
+    from inti.openrouter_client import openrouter, multiprovider
+    or_loaded = await openrouter.load_key()
+    mp_loaded = await multiprovider.load_keys()
+    provider_status = "configured" if or_loaded else "not set"
+    print(f"  OpenRouter: {provider_status} | Direct providers: {mp_loaded} loaded")
     yield
     await engine.dispose()
 

@@ -144,6 +144,39 @@ npm run dev
 | 6. DopaWeb + BYOK Payments + Multi-tenant | `722b1a2` | Completed |
 | 7. Empaquetado final (PyInstaller + Bun compile) | `e06d002` | Completed |
 
+## Configuracion de LLMs
+
+Las API keys se configuran desde la PWA (tab **Modelos**) y se persisten en la base de datos local. No se pierden al reiniciar el daemon.
+
+Tambien podes usar variables de entorno como fallback:
+
+```env
+DOPA_OPENROUTER_API_KEY=sk-or-v1-...
+DOPA_OPENAI_API_KEY=sk-...
+DOPA_ANTHROPIC_API_KEY=sk-ant-...
+DOPA_DEEPSEEK_API_KEY=sk-...
+DOPA_GOOGLE_API_KEY=AIza...
+DOPA_GROQ_API_KEY=gsk_...
+DOPA_EASYPANEL_DEPLOY_TOKEN=...
+```
+
+## Monetizacion (Open Core)
+
+El core de Dopa Code es MIT. Estrategias de monetizacion planeadas:
+
+| Nivel | Que incluye | Precio estimado |
+|-------|------------|-----------------|
+| **Community** | Todo el core, self-hosted, BYOK | Gratis |
+| **Solo Dev** | Setup guiado, skills predefinidas, CI/CD templates, soporte email | $15-20/mes |
+| **Team** | Multi-tenant dashboard, roles RBAC, audit compliance, Slack/Discord | $50-100/mes |
+| **Enterprise** | SSO, SLA, on-premise deployment, training, custom integrations | A medida |
+
+**Servicios adicionales:**
+- Consultoria: integracion DopaWeb + DopaCRM + Dopa Code
+- Skills marketplace: skills verificadas por la comunidad
+- Templates premium: temas avanzados para DopaWeb
+- Capacitacion via Dopa Academy
+
 ## Pitch
 
 Dopa Code es un orquestador de agentes de IA que vive en tu PC y se controla desde tu movil. No es otro IDE en la nube -- es tu control tower personal.

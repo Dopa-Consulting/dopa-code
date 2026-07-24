@@ -88,11 +88,12 @@ async def chat_stream(
 
 @router.post("/config")
 async def configure_key(api_key: str):
-    openrouter.api_key = api_key
+    await openrouter.save_key(api_key)
     credits = await openrouter.check_credits()
     return {
         "status": "configured" if "credits_remaining" in credits else "invalid_key",
         "credits": credits,
+        "persisted": True,
     }
 
 
@@ -120,7 +121,7 @@ from inti.openrouter_client import multiprovider, PROVIDER_ENDPOINTS
 async def configure_provider(provider: str, api_key: str):
     if provider not in PROVIDER_ENDPOINTS:
         return {"error": f"Provider no soportado: {provider}. Usa: {list(PROVIDER_ENDPOINTS.keys())}"}
-    multiprovider.configure(provider, api_key)
+    await multiprovider.configure(provider, api_key)
     return {"status": "ok", "provider": provider, "message": f"API key configurada para {provider}"}
 
 

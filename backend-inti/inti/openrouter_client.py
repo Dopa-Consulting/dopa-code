@@ -151,6 +151,54 @@ OPENROUTER_MODELS = {
 class OpenRouterClient:
     def __init__(self, api_key: str = ""):
         self.api_key = api_key or settings.openrouter_api_key
+
+    async def load_key(self) -> str:
+        from inti.database import async_session
+        from inti.models.project_knowledge import ProjectKnowledge
+        from sqlalchemy import select
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(ProjectKnowledge).where(
+                    ProjectKnowledge.project_id == "dopa",
+                    ProjectKnowledge.key == "openrouter_api_key"
+                )
+            )
+            entry = result.scalar_one_or_none()
+            if entry:
+                self.api_key = entry.value
+                return entry.value
+
+        if settings.openrouter_api_key:
+            self.api_key = settings.openrouter_api_key
+            return settings.openrouter_api_key
+
+        return ""
+
+    async def save_key(self, api_key: str) -> None:
+        from inti.database import async_session
+        from inti.models.project_knowledge import ProjectKnowledge
+        from sqlalchemy import select
+
+        self.api_key = api_key
+        async with async_session() as session:
+            result = await session.execute(
+                select(ProjectKnowledge).where(
+                    ProjectKnowledge.project_id == "dopa",
+                    ProjectKnowledge.key == "openrouter_api_key"
+                )
+            )
+            entry = result.scalar_one_or_none()
+            if entry:
+                entry.value = api_key
+            else:
+                entry = ProjectKnowledge(
+                    project_id="dopa",
+                    key="openrouter_api_key",
+                    value=api_key,
+                )
+                session.add(entry)
+            await session.commit()
         self.base_url = OPENROUTER_API
 
     @property
@@ -357,8 +405,63 @@ class MultiProviderClient:
     def __init__(self):
         self.providers: dict[str, str] = {}
 
-    def configure(self, provider: str, api_key: str) -> None:
+    async def load_keys(self) -> int:
+        from inti.database import async_session
+        from inti.models.project_knowledge import ProjectKnowledge
+        from sqlalchemy import select
+
+        loaded = 0
+        async with async_session() as session:
+            result = await session.execute(
+                select(ProjectKnowledge).where(
+                    ProjectKnowledge.project_id == "dopa",
+                    ProjectKnowledge.key.like("provider_key_%")
+                )
+            )
+            for entry in result.scalars().all():
+                provider = entry.key.replace("provider_key_", "")
+                self.providers[provider] = entry.value
+                loaded += 1
+
+        if not loaded:
+            for provider, env_key in [
+                ("openai", settings.openai_api_key),
+                ("anthropic", settings.anthropic_api_key),
+                ("deepseek", settings.deepseek_api_key),
+                ("google", settings.google_api_key),
+                ("groq", settings.groq_api_key),
+            ]:
+                if env_key:
+                    self.providers[provider] = env_key
+                    loaded += 1
+
+        return loaded
+
+    async def configure(self, provider: str, api_key: str) -> None:
+        from inti.database import async_session
+        from inti.models.project_knowledge import ProjectKnowledge
+        from sqlalchemy import select
+
         self.providers[provider] = api_key
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(ProjectKnowledge).where(
+                    ProjectKnowledge.project_id == "dopa",
+                    ProjectKnowledge.key == f"provider_key_{provider}"
+                )
+            )
+            entry = result.scalar_one_or_none()
+            if entry:
+                entry.value = api_key
+            else:
+                entry = ProjectKnowledge(
+                    project_id="dopa",
+                    key=f"provider_key_{provider}",
+                    value=api_key,
+                )
+                session.add(entry)
+            await session.commit()
 
     def is_configured(self, provider: str) -> bool:
         return bool(self.providers.get(provider))
