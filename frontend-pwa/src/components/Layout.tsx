@@ -18,6 +18,7 @@ export default function Layout() {
 
       <nav className="flex border-t border-slate-800 bg-slate-900">
         {[
+          { to: "/chat", label: "Chat", icon: "O" },
           { to: "/", label: "Dashboard", icon: "=" },
           { to: "/jobs", label: "Jobs", icon: "[]" },
           { to: "/models", label: "Modelos", icon: "AI" },
@@ -25,7 +26,6 @@ export default function Layout() {
           <NavLink
             key={to}
             to={to}
-            end={to === "/"}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center py-3 text-xs gap-1 transition-colors ${
                 isActive ? "text-amber-400" : "text-slate-500"
