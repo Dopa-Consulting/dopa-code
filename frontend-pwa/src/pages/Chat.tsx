@@ -20,7 +20,16 @@ export default function Chat() {
     {
       id: "welcome",
       role: "intl",
-      content: "Bienvenido a Dopa Code. Soy **Inti**, tu agente andino de orquestacion.\n\nPuedo ayudarte con:\n\n| Comando | Descripcion |\n|---------|-------------|\n| `crea un job` | Planificar una tarea |\n| `ejecuta el job` | Ejecutar cambios |\n| `revisa el diff` | Revisar codigo |\n| `deploy` | Desplegar cambios |\n\nEscribe un comando o crea una sesion de agente para empezar.",
+      content: "Bienvenido a **Dopa Code**. Soy **Inti**, tu agente andino de orquestacion.\n\n"
+        + "Orquesto agentes de IA que escriben, revisan y despliegan codigo desde tu PC. Vos aprobas o rechazas desde aca.\n\n"
+        + "**Comandos:**\n\n"
+        + "| Comando | Que hace |\n"
+        + "|---------|----------|\n"
+        + "| `Hola Inti` | Chat normal (OpenRouter) |\n"
+        + "| `/stream <pregunta>` | Streaming en vivo (Gemini) |\n"
+        + "| `crea sesion builder` | Nueva sesion de ejecucion |\n"
+        + "| `crea sesion architect` | Nueva sesion de diseño |\n\n"
+        + "Escribe algo para empezar.",
       timestamp: new Date().toISOString(),
       actions: [
         { id: "create_session_builder", label: "Nueva sesion Builder", variant: "default" },
@@ -51,8 +60,15 @@ export default function Chat() {
         content += `\n\n*Tokens: ${usage.total_tokens || "?"} | Modelo: ${payload.model || "openrouter"}*`;
       }
       role = "intl";
-    } else if (e.event_type === "step.delta") {
-      // Streaming text accumulation - handled by handleSend
+    } else if (
+      e.event_type === "step.delta" ||
+      e.event_type === "step.start" ||
+      e.event_type === "step.stop" ||
+      e.event_type === "interaction.created" ||
+      e.event_type === "interaction.status_update" ||
+      e.event_type === "interaction.completed" ||
+      e.event_type === "done"
+    ) {
       return;
     } else {
       switch (e.event_type) {

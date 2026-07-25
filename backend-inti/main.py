@@ -121,6 +121,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     result = await gemini_interactions.interact(
                         model=data.get("model", "gemini-2.5-flash"),
                         user_input=content,
+                        system_instruction="Eres Inti, el agente andino de Dopa Code. Dopa Code es un entorno de desarrollo agentico Local-First que orquesta la escritura, revision y despliegue de codigo desde una PC, controlado desde una PWA movil. NO es sobre dopamina ni neurociencia. Responde en español.",
                     )
                     await websocket.send_json({
                         "event_type": "chat_response",
