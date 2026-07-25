@@ -16,32 +16,49 @@ interface Message {
 
 export default function Chat() {
   const { connected, subscribe, send } = useWebSocket(WS_URL);
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<Message[]>(loadMessages);
     {
       id: "welcome",
       role: "intl",
-      content: "Bienvenido a **Dopa Code**. Soy **Inti**, tu agente andino de orquestacion.\n\n"
-        + "Orquesto agentes de IA que escriben, revisan y despliegan codigo desde tu PC. Vos aprobas o rechazas desde aca.\n\n"
-        + "**Comandos:**\n\n"
-        + "| Comando | Que hace |\n"
-        + "|---------|----------|\n"
-        + "| `Hola Inti` | Chat normal (OpenRouter) |\n"
-        + "| `/stream <pregunta>` | Streaming en vivo (Gemini) |\n"
-        + "| `crea sesion builder` | Nueva sesion de ejecucion |\n"
-        + "| `crea sesion architect` | Nueva sesion de diseño |\n\n"
-        + "Escribe algo para empezar.",
-      timestamp: new Date().toISOString(),
-      actions: [
-        { id: "create_session_builder", label: "Nueva sesion Builder", variant: "default" },
-        { id: "create_session_architect", label: "Nueva sesion Architect", variant: "default" },
-        { id: "view_jobs", label: "Ver Jobs", variant: "default" },
-      ],
-    },
-  ]);
+const WELCOME_MSG: Message = {
+    id: "welcome",
+    role: "intl",
+    content: "Bienvenido a **Dopa Code**. Soy **Inti**, tu agente andino de orquestacion.\n\n"
+      + "Orquesto agentes de IA que escriben, revisan y despliegan codigo desde tu PC. Vos aprobas o rechazas desde aca.\n\n"
+      + "**Comandos:**\n\n"
+      + "| Comando | Que hace |\n"
+      + "|---------|----------|\n"
+      + "| `Hola Inti` | Chat normal (OpenRouter) |\n"
+      + "| `/stream <pregunta>` | Streaming en vivo (Gemini) |\n"
+      + "| `crea sesion builder` | Nueva sesion de ejecucion |\n"
+      + "| `crea sesion architect` | Nueva sesion de diseño |\n\n"
+      + "Escribe algo para empezar.",
+    timestamp: new Date().toISOString(),
+    actions: [
+      { id: "create_session_builder", label: "Nueva sesion Builder", variant: "default" },
+      { id: "create_session_architect", label: "Nueva sesion Architect", variant: "default" },
+      { id: "view_jobs", label: "Ver Jobs", variant: "default" },
+    ],
+  };
+
+function loadMessages(): Message[] {
+  try {
+    const stored = sessionStorage.getItem("dopa-chat");
+    if (stored) return JSON.parse(stored);
+  } catch {}
+  return [WELCOME_MSG];
+}
+
+function saveMessages(msgs: Message[]) {
+  try {
+    sessionStorage.setItem("dopa-chat", JSON.stringify(msgs.slice(-50)));
+  } catch {}
+}
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { saveMessages(messages); }, [messages]);
 
   useEffect(() => {
     if (!connected) return;
