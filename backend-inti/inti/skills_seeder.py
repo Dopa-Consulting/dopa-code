@@ -152,6 +152,29 @@ GENERAL_SKILLS = [
         ]),
         "tags_json": json.dumps(["general", "execution", "parallel", "universal"]),
     },
+    {
+        "name": "safe_deploy",
+        "description": "Deploy con auditoria de seguridad obligatoria. 8 reglas duras, preview antes de prod, rollback documentado",
+        "steps_json": json.dumps([
+            "Fase 0: Confirmar git repo, remote, start command",
+            "Fase 1: Audit - secrets, lockfile, .env.example, dirty tree, vulnerabilidades",
+            "Fase 2: Detectar target optimo (Vercel, Railway, Docker, Easypanel)",
+            "Fase 3: Preview deploy (NUNCA --prod directo)",
+            "Fase 4: Health check - curl URL, solo 2xx/3xx permite continuar",
+            "Fase 5: Produccion - confirmacion explicita + promocion",
+            "Fase 6: Handover - verificar prod + comandos de rollback",
+        ]),
+        "best_practices_json": json.dumps([
+            "Nunca omitir el audit - es la unica puerta a produccion",
+            "Nunca deploy a prod sin preview verde confirmada",
+            "Nunca exponer secretos en logs, diffs, o commits",
+            "El working tree debe estar limpio antes de deploy",
+            "'Espera' siempre gana - cualquier duda aborta limpiamente",
+            "Si DopaWeb: verificar guardrails antes del deploy",
+            "Si BYOK payment: verificar credenciales en sandbox primero",
+        ]),
+        "tags_json": json.dumps(["general", "deploy", "security", "audit", "universal"]),
+    },
 ]
 
 # --- DopaWeb / Design (adaptado de emilkowalski + anthropics) ---

@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 
@@ -14,6 +15,112 @@ from sqlalchemy import select
 logger = logging.getLogger("inti.deploy")
 
 
+class PreDeployAudit:
+    """Pre-deploy audit checklist. Adaptado de Hainrixz/all-deploy (MIT)."""
+
+    @staticmethod
+    async def run(job_id: str, workspace_path: str) -> dict:
+        findings: list[dict] = []
+        critical_violations: list[dict] = []
+        import subprocess
+        from pathlib import Path
+
+        ws = Path(workspace_path)
+
+        # 1. .gitignore exist
+        gitignore = ws / ".gitignore"
+        if not gitignore.exists():
+            critical_violations.append({
+                "check": "no_gitignore",
+                "message": "No .gitignore found",
+                "fix": "Create .gitignore with node_modules, .env, dist, build",
+            })
+
+        # 2. .env tracked?
+        env_file = ws / ".env"
+        if env_file.exists():
+            try:
+                result = subprocess.run(
+                    ["git", "ls-files", "--error-unmatch", ".env"],
+                    cwd=str(ws), capture_output=True, timeout=5,
+                )
+                if result.returncode == 0:
+                    critical_violations.append({
+                        "check": "env_tracked",
+                        "message": ".env is tracked by git - secrets exposed!",
+                        "fix": "git rm --cached .env && add .env to .gitignore",
+                    })
+            except Exception:
+                pass
+
+        # 3. .env.example exists
+        env_example = ws / ".env.example"
+        if not env_example.exists():
+            critical_violations.append({
+                "check": "no_env_example",
+                "message": ".env.example missing. Document all env vars.",
+                "fix": "Create .env.example with all required vars (see quickstart.ps1)",
+            })
+
+        # 4. Working tree clean
+        try:
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=str(ws), capture_output=True, timeout=5,
+            )
+            if result.stdout.strip():
+                critical_violations.append({
+                    "check": "dirty_tree",
+                    "message": "Working tree is not clean",
+                    "fix": "Commit or stash changes before deploy",
+                    "details": result.stdout.decode()[:200],
+                })
+        except Exception:
+            pass
+
+        # 5. Lockfile present for Node projects
+        pkg_json = ws / "package.json"
+        if pkg_json.exists():
+            lockfiles = ["package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb"]
+            if not any((ws / lf).exists() for lf in lockfiles):
+                critical_violations.append({
+                    "check": "no_lockfile",
+                    "message": "No lockfile found. Dependencies not pinned.",
+                    "fix": "Run: npm install (or yarn/pnpm/bun install)",
+                })
+
+        # 6. Localhost binding check
+        try:
+            for py_file in ws.rglob("*.py"):
+                if py_file.name.startswith("."):
+                    continue
+                content = py_file.read_text(errors="ignore")
+                if "127.0.0.1" in content and ("uvicorn" in content or "app.run" in content or "flask run" in content):
+                    findings.append({
+                        "check": "localhost_binding",
+                        "message": f"{py_file.name} binds to 127.0.0.1 - may not work on remote hosts",
+                        "severity": "warning",
+                    })
+                    break
+        except Exception:
+            pass
+
+        passed = len(critical_violations) == 0
+
+        if not passed:
+            logger.warning(
+                f"Pre-deploy audit FAILED for job {job_id}: "
+                f"{len(critical_violations)} critical issues"
+            )
+
+        return {
+            "passed": passed,
+            "critical": critical_violations,
+            "warnings": findings,
+            "message": "Audit passed" if passed else f"{len(critical_violations)} critical issues block deploy",
+        }
+
+
 class DeployService:
 
     @staticmethod
@@ -24,6 +131,16 @@ class DeployService:
     ) -> dict:
         if settings.dopa_code_dummy:
             return DeployService._dummy_deploy(job_id, environment)
+
+        # Pre-deploy audit (skip only if explicitly bypassed)
+        if environment == "production" and triggered_by != "force":
+        audit_result = await PreDeployAudit.run(job_id, workspace_path=str(Path.cwd()))
+            if not audit_result["passed"]:
+                return {
+                    "error": "Pre-deploy audit failed",
+                    "audit": audit_result,
+                    "message": "Fix critical issues before deploying. Use triggered_by=force to bypass.",
+                }
 
         project_token = await DeployService._get_token_for_job(job_id)
         if not project_token:
