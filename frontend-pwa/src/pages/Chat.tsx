@@ -17,9 +17,7 @@ interface Message {
 export default function Chat() {
   const { connected, subscribe, send } = useWebSocket(WS_URL);
   const [messages, setMessages] = useState<Message[]>(loadMessages);
-    {
-      id: "welcome",
-      role: "intl",
+
 const WELCOME_MSG: Message = {
     id: "welcome",
     role: "intl",
