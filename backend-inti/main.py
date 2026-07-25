@@ -51,6 +51,11 @@ async def lifespan(app: FastAPI):
     mp_loaded = await multiprovider.load_keys()
     provider_status = "configured" if or_loaded else "not set"
     print(f"  OpenRouter: {provider_status} | Direct providers: {mp_loaded} loaded")
+
+    # Seed skills on startup
+    from inti.skills_seeder import seed_all_skills
+    skills_result = await seed_all_skills()
+    print(f"  Skills: {skills_result['total']} loaded ({skills_result['new']} new, {skills_result['updated']} updated)")
     yield
     await engine.dispose()
 

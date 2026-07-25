@@ -184,3 +184,10 @@ async def refine_skills(project_id: str | None = None):
 async def get_memory_context(project_id: str, profile: str = "pro_mix"):
     context = await MemoryContext.get_context_for_job(project_id, profile)
     return {"project_id": project_id, "profile": profile, "context": context}
+
+
+@router.post("/reseed-skills")
+async def reseed_skills():
+    from inti.skills_seeder import seed_all_skills
+    result = await seed_all_skills()
+    return result
