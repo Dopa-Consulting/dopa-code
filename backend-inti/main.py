@@ -104,21 +104,50 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_json()
 
-            if data.get("type") == "chat" and data.get("stream"):
+            if data.get("type") == "chat":
+                content = data.get("content", "")
+                use_stream = data.get("stream", False)
+
+                # Try Gemini Interactions API first
                 from inti.gemini_interactions import gemini_interactions
 
-                if gemini_interactions.is_configured:
+                if gemini_interactions.is_configured and use_stream:
                     async for chunk in gemini_interactions.interact_stream(
                         model=data.get("model", "gemini-2.5-flash"),
-                        user_input=data.get("content", ""),
-                        system_instruction=data.get("system"),
+                        user_input=content,
                     ):
                         await websocket.send_json(chunk)
-                else:
+                elif gemini_interactions.is_configured:
+                    result = await gemini_interactions.interact(
+                        model=data.get("model", "gemini-2.5-flash"),
+                        user_input=content,
+                    )
                     await websocket.send_json({
-                        "event_type": "error",
-                        "payload": {"error": "DOPA_GOOGLE_API_KEY no configurada"}
+                        "event_type": "chat_response",
+                        "payload": {"content": result.get("output", result.get("error", "Sin respuesta"))}
                     })
+                else:
+                    # Fallback to OpenRouter
+                    from inti.openrouter_client import openrouter
+                    if openrouter.is_configured:
+                        result = await openrouter.chat(
+                            model="deepseek/deepseek-chat",
+                            messages=[{"role": "user", "content": content}],
+                            max_tokens=1000,
+                        )
+                        await websocket.send_json({
+                            "event_type": "chat_response",
+                            "payload": {
+                                "content": result.get("content", result.get("error", "Error")),
+                                "model": result.get("model", "openrouter"),
+                                "usage": result.get("usage", {}),
+                            }
+                        })
+                    else:
+                        await websocket.send_json({
+                            "event_type": "error",
+                            "payload": {"error": "No LLM configured. Configura OpenRouter o Gemini en Modelos."}
+                        })
             else:
                 await websocket.send_json({
                     "event_type": "Echo",

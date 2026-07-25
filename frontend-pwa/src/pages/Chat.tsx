@@ -43,6 +43,18 @@ export default function Chat() {
       let role: Message["role"] = "system";
       let actions: Message["actions"] = undefined;
 
+    if (e.event_type === "chat_response") {
+      const payload = e.payload as Record<string,unknown>;
+      content = (payload.content as string) || "Sin respuesta";
+      if (payload.usage) {
+        const usage = payload.usage as Record<string,number>;
+        content += `\n\n*Tokens: ${usage.total_tokens || "?"} | Modelo: ${payload.model || "openrouter"}*`;
+      }
+      role = "intl";
+    } else if (e.event_type === "step.delta") {
+      // Streaming text accumulation - handled by handleSend
+      return;
+    } else {
       switch (e.event_type) {
         case "JobStateChanged":
           content = `Job **#${jobId.slice(0, 8)}** cambio de estado:\n\n\`${e.payload.previous_status}\` → **${e.payload.new_status}**`;
@@ -85,8 +97,9 @@ export default function Chat() {
         default:
           content = `Evento: ${e.event_type}`;
       }
+    }
 
-      setMessages((prev) => [
+    setMessages((prev) => [
         ...prev,
         { id: crypto.randomUUID(), role, content, timestamp: ts, jobId, actions },
       ]);
@@ -119,13 +132,11 @@ export default function Chat() {
 
       send({ type: "chat", content: prompt, stream: true, model: "gemini-2.5-flash" });
       const unsub = subscribe("*", (e) => {
-        if (e.event_type === "step.delta" && (e.payload as Record<string,string>)?.delta_type === "text") {
+        const d = (e as Record<string,unknown>).data as Record<string,string> || e.payload as Record<string,string>;
+        const text = d?.text || "";
+        if (e.event_type === "step.delta" && text) {
           setMessages((prev) => prev.map((m) =>
-            m.id === streamMsg.id ? { ...m, content: m.content + (e.payload as Record<string,string>).text } : m
-          ));
-        } else if (e.event_type === "step.delta" && (e.payload as Record<string,string>)?.delta_type === "thinking") {
-          setMessages((prev) => prev.map((m) =>
-            m.id === streamMsg.id ? { ...m, content: m.content + `\n> ${(e.payload as Record<string,string>).text}\n` } : m
+            m.id === streamMsg.id ? { ...m, content: m.content + text } : m
           ));
         } else if (e.event_type === "interaction.completed" || e.event_type === "done") {
           unsub();
