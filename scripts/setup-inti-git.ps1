@@ -20,15 +20,15 @@ Copy-Item "$scriptDir\commit-msg" "$hooksDir\commit-msg" -Force
 Copy-Item "$scriptDir\post-commit" "$hooksDir\post-commit" -Force
 
 # Configurar alias
-git config alias.inti '!git commit -m "[Inti] $1" --trailer "Co-authored-by: Inti <inti@dopacode.com>"'
+git config alias.inti '!git commit -m "[Inti] $1" --trailer "Co-authored-by: Inti <inti@dopa.solutions>"'
 
 Write-Host "[Inti] Hooks instalados!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Cada commit en branches intl/* o agent/* llevara:" -ForegroundColor Gray
-Write-Host "  Co-authored-by: Inti <inti@dopacode.com>" -ForegroundColor Cyan
+Write-Host "  Co-authored-by: Inti <inti@dopa.solutions>" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Para que Inti tenga foto de perfil en GitHub:" -ForegroundColor Yellow
-Write-Host "  1. Crea cuenta GitHub: inti@dopacode.com" -ForegroundColor Gray
+Write-Host "  1. Crea cuenta GitHub: inti@dopa.solutions" -ForegroundColor Gray
 Write-Host "  2. Sube public/inti-logo.svg como avatar" -ForegroundColor Gray
 Write-Host "  3. Los commits de Inti mostraran el logo del sol andino" -ForegroundColor Gray
 Write-Host ""

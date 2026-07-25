@@ -20,12 +20,12 @@ cp "$SCRIPT_DIR/post-commit" "$HOOKS_DIR/post-commit"
 chmod +x "$HOOKS_DIR/post-commit"
 
 # Configurar alias de git para commits de Inti
-git config alias.inti '!git commit -m "[Inti] $1" --trailer "Co-authored-by: Inti <inti@dopacode.com>"'
+git config alias.inti '!git commit -m "[Inti] $1" --trailer "Co-authored-by: Inti <inti@dopa.solutions>"'
 
 echo "[Inti] Hooks instalados. Cada commit en branches intl/* llevara co-autoria de Inti."
 echo "[Inti] Usa 'git inti \"mensaje\"' para commits directos con co-autoria."
 echo ""
 echo "Para que Inti tenga foto de perfil en GitHub:"
-echo "  1. Crea cuenta en GitHub: inti@dopacode.com"
+echo "  1. Crea cuenta en GitHub: inti@dopa.solutions"
 echo "  2. Sube public/inti-logo.svg como avatar"
 echo "  3. Los commits de Inti mostraran el logo del sol andino"

@@ -77,7 +77,7 @@ async function main() {
     const hookDir = require("path").join(require("child_process").execSync("git rev-parse --git-dir", { encoding: "utf8" }).trim(), "hooks");
     const intiCoAuthor = `
 
-Co-authored-by: Inti <inti@dopacode.com>
+Co-authored-by: Inti <inti@dopa.solutions>
 `;
     const hookPath = require("path").join(hookDir, "prepare-commit-msg");
     if (!require("fs").existsSync(hookPath)) {

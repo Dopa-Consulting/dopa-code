@@ -4,5 +4,5 @@
 
 # Solo agrega co-author si no hay uno ya
 if ! grep -q "Co-authored-by: Inti" "$1"; then
-  printf "\nCo-authored-by: Inti <inti@dopacode.com>\n" >> "$1"
+  printf "\nCo-authored-by: Inti <inti@dopa.solutions>\n" >> "$1"
 fi
