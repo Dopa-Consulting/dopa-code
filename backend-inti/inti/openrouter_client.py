@@ -318,7 +318,7 @@ class OpenRouterClient:
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/Dopa-Consulting/dopa-code",
+            "HTTP-Referer": "https://github.com/Dopa-Solutions/dopa-code",
             "X-Title": "Dopa Code - Inti",
         }
 
