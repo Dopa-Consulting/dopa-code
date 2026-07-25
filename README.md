@@ -1,5 +1,9 @@
 # Dopa Code
 
+<p align="center">
+  <img src="public/inti-logo.svg" alt="Inti" width="120" height="120">
+</p>
+
 Entorno de desarrollo agentico **Local-First** para cualquier proyecto de software. Inti, el agente andino, orquesta la escritura, revision y despliegue de codigo desde tu PC, controlado desde tu movil via PWA.
 
 Usalo con tu stack actual -- React, Next.js, Python, Node, lo que sea. Inti + OpenCode trabajan sobre tu repo local, en ramas aisladas, sin depender de SaaS externos. Tu codigo, tu PC, tus reglas.

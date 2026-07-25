@@ -29,17 +29,23 @@ from inti.models import (  # noqa: F401 - register all models for table creation
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     banner = f"""
-    ============================================================
-       Dopa Code - Inti (v{settings.version})
-       Agente andino de orquestacion
-    ============================================================
-       DB: {settings.database_url}
-       Dummy Mode: {settings.dopa_code_dummy}
-       Architect: {settings.architect_model}
-       Executor:  {settings.executor_model}
-       QA:        {settings.qa_model}
-       Tables:    {len(Base.metadata.tables)}
-    ============================================================
+         ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+         ▐                                              ▌
+         ▐     ☀  D O P A   C O D E  ☀               ▌
+         ▐     Inti v{settings.version}                           ▌
+         ▐     Agente andino de orquestacion           ▌
+         ▐                                              ▌
+         ▐  ░░                                     ░░   ▌
+         ▐ ░░░░   ⋆  DB: {settings.database_url[:40]:<20}⋆   ░░░░  ▌
+         ▐  ░░   ⋆  Dummy: {str(settings.dopa_code_dummy):<5}              ⋆   ░░   ▌
+         ▐       ⋆  Architect: {settings.architect_model:<25}⋆       ▌
+         ▐   ░░ ⋆  Executor:  {settings.executor_model:<25}⋆ ░░    ▌
+         ▐  ░░░░⋆  QA:        {settings.qa_model:<25}⋆░░░░   ▌
+         ▐   ░░ ⋆  Tables:    {len(Base.metadata.tables):<25}⋆ ░░    ▌
+         ▐                                              ▌
+         ▐     El Sol que ilumina tu codigo             ▌
+         ▐                                              ▌
+         ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
     """
     print(banner)
     async with engine.begin() as conn:
