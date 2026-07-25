@@ -24,6 +24,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from inti.config import settings
+
+
+@dataclass
+class WebAuthnChallenge:
     challenge: str
     user_id: str
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
