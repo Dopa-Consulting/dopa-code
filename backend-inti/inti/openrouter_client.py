@@ -260,6 +260,7 @@ OPENROUTER_MODELS = {
 class OpenRouterClient:
     def __init__(self, api_key: str = ""):
         self.api_key = api_key or settings.openrouter_api_key
+        self.base_url = OPENROUTER_API
 
     async def load_key(self) -> str:
         from inti.database import async_session

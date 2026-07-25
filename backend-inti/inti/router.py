@@ -4,7 +4,7 @@ from inti.api import health, jobs, devices, audit, events, memory
 from inti.api import tenants, templates, payments, openrouter, webauthn, voice, sessions, agent_comm, gemini_interactions
 
 api_router = APIRouter(prefix="/api/v1")
-api_router.include_router(health.router, tags=["health"])
+api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])

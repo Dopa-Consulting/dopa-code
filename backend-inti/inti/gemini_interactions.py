@@ -29,7 +29,7 @@ from inti.config import settings
 
 logger = logging.getLogger("inti.gemini_interactions")
 
-INTERACTIONS_API = "https://generativelanguage.googleapis.com/v1"
+INTERACTIONS_API = "https://generativelanguage.googleapis.com/v1beta"
 
 INTERACTIONS_MODELS = {
     "gemini-3.6-flash": {
@@ -159,10 +159,10 @@ class GeminiInteractions:
         try:
             async with httpx.AsyncClient(timeout=300.0 if background else 120.0) as client:
                 resp = await client.post(
-                    f"{self.base_url}/models/{model}:interactions",
+                    f"{self.base_url}/interactions",
                     params={"key": self.api_key},
                     headers={"Content-Type": "application/json"},
-                    json=payload,
+                    json={**payload, "model": model},
                 )
 
                 if resp.status_code == 202:
@@ -219,10 +219,10 @@ class GeminiInteractions:
             async with httpx.AsyncClient(timeout=300.0) as client:
                 async with client.stream(
                     "POST",
-                    f"{self.base_url}/models/{model}:interactions",
+                    f"{self.base_url}/interactions",
                     params={"key": self.api_key},
                     headers={"Content-Type": "application/json"},
-                    json=payload,
+                    json={**payload, "model": model},
                 ) as response:
                     async for line in response.aiter_lines():
                         if not line.startswith("data: "):
@@ -326,7 +326,7 @@ class GeminiInteractions:
                     f"{self.base_url}/models/{model}:interactions",
                     params={"key": self.api_key},
                     headers={"Content-Type": "application/json"},
-                    json=payload,
+                    json={**payload, "model": model},
                 )
                 if resp.status_code != 200:
                     return {"error": f"API error {resp.status_code}"}
