@@ -175,6 +175,28 @@ GENERAL_SKILLS = [
         ]),
         "tags_json": json.dumps(["general", "deploy", "security", "audit", "universal"]),
     },
+    {
+        "name": "the_architect",
+        "description": "Meta-agente que diseña blueprints completos. 4 fases: discovery -> deep dive -> architecture -> blueprint con 16 secciones",
+        "steps_json": json.dumps([
+            "Fase 1: Discovery - preguntar que, para quien, que tan grande. Clasificar en arquetipo",
+            "Fase 2: Deep Dive - preguntas especificas de auth, pagos, real-time, DB, multi-tenant",
+            "Fase 3: Architecture - presentar tech stack con justificacion. Confirmar o ajustar",
+            "Fase 4: Generate Blueprint - 16 secciones (overview, stack, data model, API, frontend, build order...)",
+            "Guardar blueprint en docs/blueprints/<project>-blueprint.md",
+            "El blueprint debe ser ejecutable por un agente junior sin preguntas adicionales",
+        ]),
+        "best_practices_json": json.dumps([
+            "No mas de 2-3 preguntas por turno",
+            "Preguntas abiertas que revelen requisitos ocultos",
+            "Nunca asumir - siempre confirmar con el humano",
+            "Justificar cada decision tecnica con razones concretas",
+            "Build order priorizado: fundamentos -> features -> polish",
+            "Si es DopaWeb: stack Dopa por defecto, guardrails activos",
+            "Blueprint debe incluir comandos exactos, no descripciones vagas",
+        ]),
+        "tags_json": json.dumps(["general", "planning", "design", "architecture", "universal"]),
+    },
 ]
 
 # --- DopaWeb / Design (adaptado de emilkowalski + anthropics) ---

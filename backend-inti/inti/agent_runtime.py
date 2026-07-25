@@ -91,6 +91,145 @@ class AgentRuntime:
         except Exception:
             return prompt
 
+    # --- Discovery Mode (The Architect pattern) ---
+
+    def start_discovery(self, job_id: str, idea: str) -> dict:
+        """Fase 1: Descubrimiento. El agente hace preguntas, no ejecuta codigo."""
+        self._audit("llm_architect", "discovery_started", job_id, f"Idea: {idea[:200]}")
+
+        archetype = self._detect_archetype(idea)
+
+        questions = [
+            {
+                "id": "q1",
+                "question": f"Veo que es un proyecto tipo **{archetype}**. Cuentame mas: que problema resuelve y para quien?",
+                "type": "open",
+            },
+            {
+                "id": "q2",
+                "question": "Que tan grande debe ser la primera version? MVP minimo o producto completo?",
+                "type": "choice",
+                "options": ["MVP (minimo viable, 1-2 semanas)", "Producto base (1 mes)", "Completo (3+ meses)"],
+            },
+            {
+                "id": "q3",
+                "question": "Ya tenes algo de esto? (codigo existente, diseño, base de datos, dominio?)",
+                "type": "open",
+            },
+        ]
+
+        return {
+            "phase": "discovery",
+            "job_id": job_id,
+            "archetype": archetype,
+            "questions": questions,
+            "message": "Responde estas preguntas para empezar a diseñar tu proyecto.",
+        }
+
+    def continue_discovery(
+        self, job_id: str, answers: dict, previous_phase: str = "discovery"
+    ) -> dict:
+        """Fase 2: Deep dive. Preguntas especificas segun arquetipo y respuestas anteriores."""
+        self._audit("llm_architect", "discovery_continued", job_id, f"Answers: {len(answers)}")
+
+        archetype = self._detect_archetype(str(answers))
+
+        if previous_phase == "discovery":
+            questions = [
+                {
+                    "id": "dd1",
+                    "question": "Necesitas cuentas de usuario? Que roles? (admin, cliente, staff...)",
+                    "type": "open",
+                },
+                {
+                    "id": "dd2",
+                    "question": "El proyecto necesita procesar pagos? Que metodos?",
+                    "type": "choice",
+                    "options": ["No necesita pagos", "MercadoPago", "Stripe", "PayPal", "Otro / Multiples"],
+                },
+                {
+                    "id": "dd3",
+                    "question": "Necesitas funciones en tiempo real? (notificaciones, chat, dashboard en vivo)",
+                    "type": "choice",
+                    "options": ["No", "Notificaciones basicas", "Chat en tiempo real", "Dashboard en vivo"],
+                },
+            ]
+        elif previous_phase == "deep_dive":
+            questions = [
+                {
+                    "id": "ac1",
+                    "question": f"Para el proyecto tipo **{archetype}**, te propongo:\n\n"
+                    f"**Frontend**: Next.js + React + Tailwind\n"
+                    f"**Backend**: Express + Sequelize + PostgreSQL (si es parte de Dopa)\n"
+                    f"**Auth**: JWT + WebAuthn\n"
+                    f"**Hosting**: Easypanel via Dopa Code\n\n"
+                    "Te parece este stack? Queres cambiar algo?",
+                    "type": "open",
+                },
+            ]
+        else:
+            questions = []
+
+        return {
+            "phase": "deep_dive" if previous_phase == "discovery" else "architecture",
+            "job_id": job_id,
+            "archetype": archetype,
+            "questions": questions,
+            "message": "Respondiendo estas preguntas defino la arquitectura completa.",
+        }
+
+    def finalize_discovery(
+        self, job_id: str, answers: dict, archetype: str = "saas-webapp"
+    ) -> dict:
+        """Fase 4: Generar blueprint. Produce las 16 secciones."""
+        self._audit("llm_architect", "blueprint_generated", job_id, f"Archetype: {archetype}")
+
+        return {
+            "phase": "blueprint_ready",
+            "job_id": job_id,
+            "archetype": archetype,
+            "blueprint": {
+                "title": f"Blueprint: {answers.get('q1', 'Nuevo Proyecto')[:50]}",
+                "sections": [
+                    {"id": 1, "name": "Project Overview", "status": "ready"},
+                    {"id": 2, "name": "Tech Stack", "status": "ready"},
+                    {"id": 3, "name": "Directory Structure", "status": "ready"},
+                    {"id": 4, "name": "Data Model", "status": "pending"},
+                    {"id": 5, "name": "API Design", "status": "pending"},
+                    {"id": 6, "name": "Frontend Architecture", "status": "pending"},
+                    {"id": 7, "name": "Design System", "status": "pending"},
+                    {"id": 8, "name": "Auth & Authorization", "status": "pending"},
+                    {"id": 9, "name": "Build Order", "status": "ready"},
+                    {"id": 10, "name": "Environment Setup", "status": "ready"},
+                    {"id": 11, "name": "Dependencies", "status": "pending"},
+                    {"id": 12, "name": "Deployment", "status": "ready"},
+                    {"id": 13, "name": "Testing", "status": "pending"},
+                    {"id": 14, "name": "Skills to Use", "status": "ready"},
+                    {"id": 15, "name": "AGENTS.md", "status": "pending"},
+                    {"id": 16, "name": "Rules", "status": "ready"},
+                ],
+            },
+            "next_action": "El blueprint esta listo para ser ejecutado por Inti + OpenCode.",
+        }
+
+    def _detect_archetype(self, idea: str) -> str:
+        idea_lower = idea.lower()
+        if any(w in idea_lower for w in ["saas", "app web", "dashboard", "admin", "panel"]):
+            return "saas-webapp"
+        if any(w in idea_lower for w in ["api", "backend", "microservicio", "endpoint"]):
+            return "api-backend"
+        if any(w in idea_lower for w in ["landing", "portfolio", "sitio", "marketing", "pagina"]):
+            return "marketing-site"
+        if any(w in idea_lower for w in ["movil", "app", "ios", "android", "expo"]):
+            return "mobile-app"
+        if any(w in idea_lower for w in ["tienda", "ecommerce", "comercio", "dopaweb"]):
+            return "dopaweb-saas"
+        if any(w in idea_lower for w in ["blog", "contenido", "cms", "docs"]):
+            return "content-platform"
+        return "saas-webapp"
+
+    # --- Plan/Execute ---
+
     async def plan_change(self, job_id: str, prompt: str) -> dict:
         self._audit("llm_architect", "plan_requested", job_id, f"Prompt: {prompt[:200]}")
         enhanced_prompt = await self._inject_erp_context(job_id, prompt)
@@ -200,9 +339,16 @@ class AgentRuntime:
             return {"error": "Bridge timeout", "url": f"{BRIDGE_URL}{path}"}
 
     def _audit(self, actor_type: str, action: str, job_id: str, summary: str) -> None:
-        from inti.audit import log_action
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._audit_async(actor_type, action, job_id, summary))
+        except RuntimeError:
+            pass
 
-        log_action(
+    async def _audit_async(self, actor_type: str, action: str, job_id: str, summary: str) -> None:
+        from inti.audit import log_action
+        await log_action(
             actor_type=actor_type,
             action=action,
             job_id=job_id,
