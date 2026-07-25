@@ -7,7 +7,7 @@ Auditoria tecnica completa del repositorio Dopa Code. Revisar calidad de codigo,
 
 Dopa Code es un entorno de desarrollo agentico Local-First. Inti (orquestador Python/FastAPI) maneja agentes que escriben, revisan y despliegan codigo via OpenCode CLI, controlados desde una PWA movil (React + Tailwind + Dexie).
 
-**Repo**: https://github.com/Dopa-Solutions/dopa-code
+**Repo**: https://github.com/Dopa-Consulting/dopa-code
 **Stack**: Python 3.14 + FastAPI + SQLAlchemy 2.0 + SQLite | React 19 + Vite 8 + Tailwind 4 + TypeScript | Node.js/Bun bridge
 
 ## Estructura clave
