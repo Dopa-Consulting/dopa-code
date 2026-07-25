@@ -42,13 +42,13 @@ class Job(Base):
     )
 
     steps: Mapped[list["JobStep"]] = relationship(
-        "JobStep", back_populates="job", order_by="JobStep.order"
+        "JobStep", back_populates="job", order_by="JobStep.order", cascade="all, delete-orphan"
     )
-    diffs: Mapped[list["Diff"]] = relationship("Diff", back_populates="job")
-    approvals: Mapped[list["Approval"]] = relationship("Approval", back_populates="job")
-    events: Mapped[list["Event"]] = relationship("Event", back_populates="job")
-    audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="job")
-    ci_runs: Mapped[list["CiRun"]] = relationship("CiRun", back_populates="job")
+    diffs: Mapped[list["Diff"]] = relationship("Diff", back_populates="job", cascade="all, delete-orphan")
+    approvals: Mapped[list["Approval"]] = relationship("Approval", back_populates="job", cascade="all, delete-orphan")
+    events: Mapped[list["Event"]] = relationship("Event", back_populates="job", cascade="all, delete-orphan")
+    audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="job", cascade="all, delete-orphan")
+    ci_runs: Mapped[list["CiRun"]] = relationship("CiRun", back_populates="job", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Job {self.id} [{self.status}] {self.title}>"

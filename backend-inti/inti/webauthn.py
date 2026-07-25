@@ -1,13 +1,29 @@
+"""
+WebAuthn (Passkeys) - Implementacion MVP.
+
+ADVERTENCIA: Esta es una implementacion simplificada para desarrollo.
+NO apta para produccion. Para produccion usar una libreria como:
+  pip install webauthn
+
+Limitaciones conocidas:
+  - No verifica firmas criptograficas (attestation/assertion)
+  - No valida el formato de credential public key (COSE/CTAP2)
+  - El challenge es un token opaco, no un ArrayBuffer como requiere WebAuthn
+  - Las sesiones son en memoria (se pierden al reiniciar)
+
+Para produccion:
+  - Usar py_webauthn (https://github.com/duo-labs/py_webauthn)
+  - Persistir credenciales en DB con campos binary
+  - Validar origen (origin) y RP ID
+  - Implementar contador de firmas (signature counter)
+"""
+
 import json
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from inti.config import settings
-
-
-@dataclass
-class WebAuthnChallenge:
     challenge: str
     user_id: str
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

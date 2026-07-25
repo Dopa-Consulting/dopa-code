@@ -17,10 +17,17 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event: FetchEvent) => {
   if (event.request.method !== "GET") return;
 
+  const url = new URL(event.request.url);
+
+  // Never cache API calls
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/ws")) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetched = fetch(event.request).then((response) => {
-        if (response.ok) {
+        if (response.ok && response.type === "basic") {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, clone);
