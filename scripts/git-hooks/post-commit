@@ -1,0 +1,5 @@
+#!/bin/sh
+# Inti post-commit hook
+# Notifica a Inti que se hizo un commit para que actualice el estado del job
+# (placeholder para integracion futura)
+echo "[Inti] Commit registrado - verificando job asociado..."

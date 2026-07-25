@@ -1,0 +1,12 @@
+#!/bin/sh
+# commit-msg hook para Inti
+# Agrega prefix [Inti] a commits hechos en branches de Inti
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+case "$BRANCH" in
+  intl/*|dopa/*|agent/*)
+    if ! grep -q "^\[Inti\]" "$1"; then
+      sed -i "1s/^/[Inti] /" "$1"
+    fi
+    ;;
+esac

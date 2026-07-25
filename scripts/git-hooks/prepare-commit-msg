@@ -1,0 +1,8 @@
+#!/bin/sh
+# Inti co-author hook - agrega a Inti como co-autor en cada commit
+# que el agente de OpenCode hace desde el bridge
+
+# Solo agrega co-author si no hay uno ya
+if ! grep -q "Co-authored-by: Inti" "$1"; then
+  printf "\nCo-authored-by: Inti <inti@dopacode.com>\n" >> "$1"
+fi

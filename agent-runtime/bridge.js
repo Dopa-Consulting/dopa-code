@@ -72,6 +72,28 @@ function parseFilesChanged(diff) {
 }
 
 async function main() {
+  // Activar co-autoria de Inti en este workspace
+  try {
+    const hookDir = require("path").join(require("child_process").execSync("git rev-parse --git-dir", { encoding: "utf8" }).trim(), "hooks");
+    const intiCoAuthor = `
+
+Co-authored-by: Inti <inti@dopacode.com>
+`;
+    const hookPath = require("path").join(hookDir, "prepare-commit-msg");
+    if (!require("fs").existsSync(hookPath)) {
+      require("fs").writeFileSync(hookPath,
+        `#!/bin/sh
+if ! grep -q "Co-authored-by: Inti" "$1"; then
+  printf "${intiCoAuthor}" >> "$1"
+fi
+`);
+      require("fs").chmodSync(hookPath, "755");
+      console.log("[bridge] Inti co-author hook installed");
+    }
+  } catch (e) {
+    // non-git directory, skip
+  }
+
   const server = http.createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json");
     res.setHeader("Access-Control-Allow-Origin", "*");

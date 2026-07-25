@@ -117,3 +117,6 @@ Write-Host "            $bridgeLog" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Para detener: Ctrl+C en las ventanas abiertas" -ForegroundColor Gray
 Write-Host ""
+Write-Host "  Para activar co-autoria de Inti en commits:" -ForegroundColor Yellow
+Write-Host "    .\scripts\setup-inti-git.ps1" -ForegroundColor Gray
+Write-Host ""
