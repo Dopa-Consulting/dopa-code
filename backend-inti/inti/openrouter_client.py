@@ -313,7 +313,7 @@ class OpenRouterClient:
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key) and not self.api_key.endswith("...")
 
     def get_headers(self) -> dict:
         return {
@@ -574,7 +574,8 @@ class MultiProviderClient:
             await session.commit()
 
     def is_configured(self, provider: str) -> bool:
-        return bool(self.providers.get(provider))
+        key = self.providers.get(provider, "")
+        return bool(key) and not key.endswith("...")
 
     async def chat(
         self, provider: str, model: str, messages: list[dict], max_tokens: int = 8000

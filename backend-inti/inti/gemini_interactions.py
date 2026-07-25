@@ -71,7 +71,7 @@ class GeminiInteractions:
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key) and not self.api_key.endswith("...")
 
     # ------------------------------------------------------------------
     # Core: interact (sincrono)
