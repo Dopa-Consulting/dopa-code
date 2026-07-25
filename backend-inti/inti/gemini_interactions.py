@@ -199,19 +199,24 @@ class GeminiInteractions:
     async def interact_stream(
         self, model: str, user_input: str, system_instruction: str | None = None
     ) -> AsyncIterator[dict]:
-        """Streaming version de la interaccion."""
+        """
+        Streaming con step-based events (SSE).
+        Eventos: interaction.created → step.start → step.delta → step.stop → interaction.completed
+        Soporta: text, thought_summary, function_call, image, google_search.
+        """
         if not self.is_configured:
-            yield {"error": "API key not configured"}
+            yield {"event_type": "error", "payload": {"error": "API key not configured"}}
             return
 
-        parts = [{"text": user_input}]
-        payload = {"user_input": {"parts": parts}}
-
+        payload: dict = {
+            "user_input": {"parts": [{"text": user_input}]},
+            "stream": True,
+        }
         if system_instruction:
             payload["system_instruction"] = {"parts": [{"text": system_instruction}]}
 
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=300.0) as client:
                 async with client.stream(
                     "POST",
                     f"{self.base_url}/models/{model}:interactions",
@@ -220,13 +225,84 @@ class GeminiInteractions:
                     json=payload,
                 ) as response:
                     async for line in response.aiter_lines():
-                        if line.startswith("data: "):
-                            try:
-                                yield json.loads(line[6:])
-                            except json.JSONDecodeError:
-                                continue
+                        if not line.startswith("data: "):
+                            continue
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            yield {"event_type": "done", "payload": {}}
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            event_type = data.get("event_type", "unknown")
+
+                            if event_type == "interaction.created":
+                                self.last_interaction_id = data.get("interaction", {}).get("id")
+                                yield {"event_type": "interaction.created", "payload": data}
+
+                            elif event_type == "step.start":
+                                step = data.get("step", {})
+                                yield {
+                                    "event_type": "step.start",
+                                    "payload": {
+                                        "index": data.get("index", 0),
+                                        "step_type": step.get("type", "unknown"),
+                                        "step_name": step.get("name", ""),
+                                    }
+                                }
+
+                            elif event_type == "step.delta":
+                                delta = data.get("delta", {})
+                                delta_type = delta.get("type", "unknown")
+                                out: dict = {
+                                    "event_type": "step.delta",
+                                    "payload": {"index": data.get("index", 0), "delta_type": delta_type},
+                                }
+
+                                if delta_type == "text":
+                                    out["payload"]["text"] = delta.get("text", "")
+                                elif delta_type == "thought_summary":
+                                    content = delta.get("content", {})
+                                    out["payload"]["text"] = content.get("text", "")
+                                    out["payload"]["delta_type"] = "thinking"
+                                elif delta_type == "image":
+                                    out["payload"]["data"] = delta.get("data", "")[:50] + "..."
+                                    out["payload"]["mime_type"] = delta.get("mime_type", "")
+                                elif delta_type == "arguments_delta":
+                                    out["payload"]["arguments"] = delta.get("arguments", "")
+                                elif delta_type == "google_search_call":
+                                    out["payload"]["queries"] = delta.get("arguments", {})
+                                elif delta_type == "thought_signature":
+                                    out["payload"]["delta_type"] = "thinking_signature"
+
+                                yield out
+
+                            elif event_type == "step.stop":
+                                yield {
+                                    "event_type": "step.stop",
+                                    "payload": {"index": data.get("index", 0)}
+                                }
+
+                            elif event_type == "interaction.completed":
+                                usage = data.get("interaction", {}).get("usage", {})
+                                yield {
+                                    "event_type": "interaction.completed",
+                                    "payload": {
+                                        "status": data.get("interaction", {}).get("status"),
+                                        "total_tokens": usage.get("total_tokens", 0),
+                                        "cached_tokens": usage.get("total_cached_tokens", 0),
+                                    }
+                                }
+
+                            elif event_type == "error":
+                                yield {"event_type": "error", "payload": data.get("error", {})}
+
+                            else:
+                                yield {"event_type": event_type, "payload": data}
+
+                        except json.JSONDecodeError:
+                            continue
         except Exception as e:
-            yield {"error": str(e)}
+            yield {"event_type": "error", "payload": {"error": str(e)}}
 
     async def continue_interaction(
         self,

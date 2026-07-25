@@ -96,42 +96,60 @@ export default function Chat() {
 
   const handleSend = useCallback(async () => {
     if (!input.trim()) return;
+
+    const isStreamCmd = input.startsWith("/stream ") || input.startsWith("/gemini ");
+    const prompt = isStreamCmd ? input.replace(/^\/(stream|gemini)\s*/, "") : input;
+
     const msg: Message = {
       id: crypto.randomUUID(),
       role: "user",
       content: input,
       timestamp: new Date().toISOString(),
     };
+
+    if (isStreamCmd && connected) {
+      const streamMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "intl",
+        content: "",
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, msg, streamMsg]);
+      setInput("");
+
+      send({ type: "chat", content: prompt, stream: true, model: "gemini-2.5-flash" });
+      const unsub = subscribe("*", (e) => {
+        if (e.event_type === "step.delta" && (e.payload as Record<string,string>)?.delta_type === "text") {
+          setMessages((prev) => prev.map((m) =>
+            m.id === streamMsg.id ? { ...m, content: m.content + (e.payload as Record<string,string>).text } : m
+          ));
+        } else if (e.event_type === "step.delta" && (e.payload as Record<string,string>)?.delta_type === "thinking") {
+          setMessages((prev) => prev.map((m) =>
+            m.id === streamMsg.id ? { ...m, content: m.content + `\n> ${(e.payload as Record<string,string>).text}\n` } : m
+          ));
+        } else if (e.event_type === "interaction.completed" || e.event_type === "done") {
+          unsub();
+        }
+      });
+      return;
+    }
+
     setMessages((prev) => [...prev, msg]);
-    send({ type: "chat", content: input });
+    send({ type: "chat", content: prompt });
     setInput("");
 
-    const lower = input.toLowerCase();
-
+    const lower = prompt.toLowerCase();
     if (lower.includes("crea") && lower.includes("sesion")) {
-      if (lower.includes("builder") || lower.includes("build")) {
-        try {
-          await fetch("http://localhost:8000/api/v1/sessions/", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ role: "builder" }),
-          });
-        } catch {}
-      } else if (lower.includes("architect") || lower.includes("plan")) {
-        try {
-          await fetch("http://localhost:8000/api/v1/sessions/", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ role: "architect" }),
-          });
-        } catch {}
-      }
+      const role = lower.includes("builder") || lower.includes("build") ? "builder" : "architect";
+      try {
+        await fetch("http://localhost:8000/api/v1/sessions/", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role }),
+        });
+      } catch {}
     }
-
-    if (lower.includes("job") || lower.includes("lista")) {
-      await syncJobs();
-    }
-  }, [input, send]);
+    if (lower.includes("job") || lower.includes("lista")) await syncJobs();
+  }, [input, send, connected, subscribe]);
 
   const handleAction = useCallback(async (action: string, jobId: string) => {
     setMessages((prev) => [

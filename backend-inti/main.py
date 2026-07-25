@@ -107,13 +107,30 @@ async def websocket_endpoint(websocket: WebSocket):
     })
     try:
         while True:
-            data = await websocket.receive_text()
-            await websocket.send_json({
-                "event_type": "Echo",
-                "job_id": "",
-                "version": 1,
-                "payload": {"received": data},
-            })
+            data = await websocket.receive_json()
+
+            if data.get("type") == "chat" and data.get("stream"):
+                from inti.gemini_interactions import gemini_interactions
+
+                if gemini_interactions.is_configured:
+                    async for chunk in gemini_interactions.interact_stream(
+                        model=data.get("model", "gemini-2.5-flash"),
+                        user_input=data.get("content", ""),
+                        system_instruction=data.get("system"),
+                    ):
+                        await websocket.send_json(chunk)
+                else:
+                    await websocket.send_json({
+                        "event_type": "error",
+                        "payload": {"error": "DOPA_GOOGLE_API_KEY no configurada"}
+                    })
+            else:
+                await websocket.send_json({
+                    "event_type": "Echo",
+                    "job_id": "",
+                    "version": 1,
+                    "payload": {"received": str(data)[:200]},
+                })
     except WebSocketDisconnect:
         pass
 

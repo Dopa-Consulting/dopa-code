@@ -392,5 +392,96 @@ class AgentRuntime:
             logger.warning(f"Guardrail validation failed: {e}")
             return {"passed": True, "warning": str(e)}
 
+    # --- Gemini Interactions API routing ---
+
+    async def _route_chat(self, job_id: str, role: str, prompt: str, model_override: str | None = None) -> dict:
+        """
+        Rutea una llamada de chat al mejor proveedor segun el modelo configurado.
+        Prioridad: Gemini Interactions > OpenRouter > Direct APIs > Bridge (fallback).
+
+        Si el modelo es de Google y la API key esta configurada, usa Interactions API
+        (cache implicito, background execution, menor costo).
+        """
+        from inti.database import async_session
+        from inti.models.job import Job
+        from sqlalchemy import select
+
+        async with async_session() as session:
+            result = await session.execute(select(Job).where(Job.id == job_id))
+            job = result.scalar_one_or_none()
+
+        model = model_override or (
+            settings.architect_model if role == "architect" else
+            settings.executor_model if role == "executor" else
+            settings.qa_model
+        )
+
+        # Gemini Interactions API (nuevo endpoint unificado)
+        if "gemini" in model or "google" in model:
+            from inti.gemini_interactions import gemini_interactions
+
+            if gemini_interactions.is_configured:
+                gemini_model = model.split("/")[-1] if "/" in model else model
+
+                system = None
+                if role == "architect":
+                    system = "You are an Architect LLM. Design complete software blueprints. Ask clarifying questions before proposing solutions."
+                elif role == "executor":
+                    system = "You are an Executor LLM. Write production-quality code. Follow the plan precisely."
+                elif role == "qa":
+                    system = "You are a QA Reviewer LLM. Find bugs, security issues, and improvements. Be thorough."
+
+                result = await gemini_interactions.interact(
+                    model=gemini_model,
+                    user_input=prompt,
+                    system_instruction=system,
+                    background=len(prompt) > 5000,  # background para prompts largos
+                )
+                if "output" in result:
+                    return {"content": result["output"], "model": gemini_model, "interaction_id": result.get("interaction_id")}
+                if "error" in result:
+                    logger.info(f"Gemini Interactions failed: {result['error']}, falling back to bridge")
+
+        # Deep Research agent para investigacion
+        if role == "architect" and model in ("deep-research", "deep-research-max", "research"):
+            from inti.gemini_interactions import gemini_interactions
+
+            if gemini_interactions.is_configured:
+                max_mode = "max" in model
+                result = await gemini_interactions.deep_research(prompt, max_mode)
+                if "output" in result:
+                    return {"content": result["output"], "model": "deep-research", "interaction_id": result.get("interaction_id")}
+
+        # Antigravity Agent nativo para QA
+        if role == "qa" and model in ("antigravity", "antigravity-agent"):
+            from inti.gemini_interactions import gemini_interactions
+
+            if gemini_interactions.is_configured:
+                code_context = ""
+                if job:
+                    code_context = f"Job: {job.title} (profile: {job.profile})"
+                result = await gemini_interactions.antigravity_qa(prompt, code_context)
+                if "output" in result:
+                    return {"content": result["output"], "model": "antigravity-agent", "interaction_id": result.get("interaction_id")}
+
+        # Fallback al bridge (OpenCode CLI)
+        return await self._call_bridge("POST", "/execute", {
+            "title": f"Inti {role.title()} {job_id[:8]}",
+            "prompt": prompt,
+            "directory": str(self.workspace_root),
+            "agent": role,
+        })
+
+    async def research_for_architect(self, job_id: str, topic: str) -> dict:
+        """Usa Deep Research para investigar un tema antes de diseñar."""
+        self._audit("llm_architect", "research_started", job_id, f"Researching: {topic}")
+        result = await self._route_chat(job_id, "architect", topic, "deep-research-max")
+        return {"research_result": result, "topic": topic}
+
+    async def qa_with_antigravity_native(self, job_id: str, code: str) -> dict:
+        """Usa Antigravity Agent nativo para QA."""
+        self._audit("llm_qa", "qa_antigravity", job_id, "QA with Antigravity Agent")
+        return await self._route_chat(job_id, "qa", code, "antigravity-agent")
+
 
 agent_runtime = AgentRuntime()
