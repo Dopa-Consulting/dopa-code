@@ -95,7 +95,7 @@ class GeminiInteractions:
             return {"output": f"[DUMMY] {model or agent}: {user_input[:100]}..."}
 
         payload: dict = {
-            "input": [{"type": "text", "text": user_input}],
+            "input": user_input,  # string directly, not array of parts
             "store": store,
         }
 
@@ -157,7 +157,7 @@ class GeminiInteractions:
             return
 
         payload: dict = {
-            "input": [{"type": "text", "text": user_input}],
+            "input": user_input,  # string directly
             "stream": True,
         }
         if model:
