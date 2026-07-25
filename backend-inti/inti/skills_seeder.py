@@ -197,6 +197,27 @@ GENERAL_SKILLS = [
         ]),
         "tags_json": json.dumps(["general", "planning", "design", "architecture", "universal"]),
     },
+    {
+        "name": "cyber_neo_security_audit",
+        "description": "Auditoria de seguridad integral OWASP 2025 + CWE Top 25. 11 dominios, 60+ secret patterns, reporte profesional con CVSS",
+        "steps_json": json.dumps([
+            "Phase 1: Reconnaissance - detectar stack, frameworks, estimar scope",
+            "Phase 2: 5 subagentes paralelos - SAST, secrets, deps, auth, CI/CD",
+            "Phase 3: Report - deduplicar, clasificar CVSS, mapear OWASP, remediation",
+            "Read-only sobre el proyecto. Nunca modificar archivos",
+            "Guardar reporte en docs/security-reports/<project>-<date>.md",
+        ]),
+        "best_practices_json": json.dumps([
+            "NUNCA modificar archivos del proyecto objetivo",
+            "NUNCA incluir secretos detectados en el reporte",
+            "CVSS scoring: Critical 9.0+, High 7.0+, Medium 4.0+, Low 1.0+",
+            "Mapear cada finding a CWE + OWASP 2025",
+            "Incluir remediation concreta (codigo vulnerable -> codigo seguro)",
+            "Integrar con PreDeployAudit: findings criticos bloquean deploy",
+            "Usar subagentes paralelos para escanear mas rapido",
+        ]),
+        "tags_json": json.dumps(["general", "security", "audit", "owasp", "cwe", "universal"]),
+    },
 ]
 
 # --- DopaWeb / Design (adaptado de emilkowalski + anthropics) ---
