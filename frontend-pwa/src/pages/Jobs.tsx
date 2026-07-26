@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import useWebSocket from "../hooks/useWebSocket";
 import { syncJobs, getLocalJobs, type Job } from "../services/sync";
 
-const WS_URL = "ws://localhost:8000/ws";
+const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 
 const STATUS_COLORS: Record<string, string> = {
   planned: "bg-slate-700 text-slate-300",

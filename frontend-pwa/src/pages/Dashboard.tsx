@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import useWebSocket from "../hooks/useWebSocket";
 import { syncJobs, getLocalJobs, flushPendingActions, type Job } from "../services/sync";
 
-const WS_URL = "ws://localhost:8000/ws";
-const API_BASE = "http://localhost:8000/api/v1";
+const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
+const API_BASE = `${location.protocol}//${location.host}/api/v1`;
 
 interface AgentSession {
   id: string;

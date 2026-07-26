@@ -1,6 +1,6 @@
 import dbase, { type Job, type Diff, type PendingAction } from "../db";
 
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = `${location.protocol}//${location.host}/api/v1`;
 
 export type { Job, Diff, PendingAction };
 

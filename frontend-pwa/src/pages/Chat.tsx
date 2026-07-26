@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import useWebSocket from "../hooks/useWebSocket";
 import { syncJobs } from "../services/sync";
 
-const WS_URL = "ws://localhost:8000/ws";
+const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 
 interface Message {
   id: string;
@@ -88,7 +88,7 @@ export default function Chat() {
     setInput("");
     if (prompt.includes("crea sesion")) {
       const role = prompt.includes("builder") ? "builder" : "architect";
-      try { await fetch("http://localhost:8000/api/v1/sessions/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role }) }); } catch {}
+      try { await fetch("/api/v1/sessions/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role }) }); } catch {}
     }
     if (prompt.includes("job") || prompt.includes("lista")) await syncJobs();
   }, [input, send, subscribe]);
