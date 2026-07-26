@@ -118,14 +118,16 @@ async def websocket_endpoint(websocket: WebSocket):
                     ):
                         await websocket.send_json(chunk)
                 elif gemini_interactions.is_configured:
-                    prompt = (
-                        "[System: Eres Inti, el agente andino de Dopa Code. "
-                        "Dopa Code es un entorno de desarrollo agentico. "
-                        "Responde en español.]\n\n" + content
+                    identity = (
+                        "Tu nombre es Inti. Eres el agente andino de Dopa Code, "
+                        "un entorno de desarrollo agentico Local-First. "
+                        "Orquestas agentes que escriben, revisan y despliegan codigo. "
+                        "NO eres un chatbot generico. NO estas basado en dopamina ni neurociencia. "
+                        "Responde siempre en español, en primera persona como Inti.\n\n"
                     )
                     result = await gemini_interactions.interact(
                         model=data.get("model", "gemini-2.5-flash"),
-                        user_input=prompt,
+                        user_input=identity + content,
                     )
                     if "error" not in result:
                         await websocket.send_json({
