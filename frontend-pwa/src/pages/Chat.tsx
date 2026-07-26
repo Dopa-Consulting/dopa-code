@@ -49,7 +49,21 @@ export default function Chat() {
       if (["step.delta","step.start","step.stop","interaction.created","interaction.status_update","interaction.completed","done"].includes(et)) return;
       if (et === "chat_response") {
         const p = e.payload as Record<string,unknown>;
-        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "intl", content: (p.content as string) || "Sin respuesta", timestamp: new Date().toISOString() }]);
+        const jid = (p.job_id as string) || "";
+        const act = jid ? [
+          { id: "approve", label: "Approve", variant: "approve" as const },
+          { id: "reject", label: "Reject", variant: "reject" as const },
+        ] : undefined;
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(), role: "intl",
+          content: (p.content as string) || "Sin respuesta",
+          timestamp: new Date().toISOString(),
+          jobId: jid,
+        }]);
+        // If job created, approve/reject via API
+        if (jid && act) {
+          // Auto-approve for demo purposes? No - let user click buttons.
+        }
         return;
       }
       if (et === "JobStateChanged") {

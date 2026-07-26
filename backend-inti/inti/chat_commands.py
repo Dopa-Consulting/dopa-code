@@ -1,11 +1,9 @@
-"""Inti Chat Commands - Acceso directo a DB (sin HTTP loopback)."""
+"""Inti Chat Commands - Simple y directo."""
 
-import json
 import re
 import subprocess
 from pathlib import Path
 
-from inti.config import settings
 from inti.database import async_session
 from inti.models.job import Job
 
@@ -20,18 +18,20 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
         try:
             from inti.orchestrator import orchestrator
             session = orchestrator.create_session(role=role)
-            return {"type": "action",
-                    "content": f"**Sesion {role} creada**: `{session.id}`\nModelo: {session.model}"}
+            return {"type": "action", "content": f"**Sesion {role}**: `{session.id[:12]}`\nModelo: {session.model}"}
         except Exception as e:
             return {"type": "action", "content": f"Error: {e}"}
 
-    # --- Crear Job real (cualquier tarea que empiece con verbo) ---
+    # --- Crear Job (cualquier tarea) ---
     verbs = ["crea", "hace", "haz", "genera", "construye", "diseña", "implementa",
              "desarrolla", "codifica", "modifica", "refactoriza", "corrige", "arregla",
              "añade", "agrega", "escribe"]
     first = lower.split(" ")[0] if " " in lower else lower
+
     if first in verbs and not any(w in lower for w in ["sesion", "carpeta", "directorio", "archivo", "folder"]):
         title = msg[:80] + ("..." if len(msg) > 80 else "")
+
+        # Auto-detect profile
         profile = "pro_mix"
         if any(w in lower for w in ["web", "landing", "pagina", "sitio", "frontend", "ui", "ux", "css", "html", "react", "design"]):
             profile = "dopaweb_theme"
@@ -43,7 +43,7 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
         try:
             async with async_session() as session:
                 job = Job(title=title, description=msg, profile=profile,
-                          autonomy_level="human_gatekeeper", status="planned")
+                          autonomy_level="human_gatekeeper", status="awaiting_approval")
                 session.add(job)
                 await session.commit()
                 await session.refresh(job)
@@ -52,34 +52,8 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
             from inti.audit import log_action
             await log_action(actor_type="human", action="created_job", job_id=job_id, summary=title)
 
-            # Ejecutar pipeline FSM real
-            from inti.agent_runtime import agent_runtime
-            plan_result = await agent_runtime.plan_change(job_id, msg)
-            exec_result = await agent_runtime.apply_change(job_id, plan_result, f"intl/{job_id[:8]}")
-            diff_result = await agent_runtime.generate_diff(job_id, f"intl/{job_id[:8]}")
-            qa_result = await agent_runtime.run_qa_review(job_id, diff_result.get("diff_text", ""))
-
-            # PostMortem
-            try:
-                from inti.memory import PostMortem
-                await PostMortem.run(job_id)
-            except Exception:
-                pass
-
-            lines = [
-                f"**Job `{job_id[:8]}` completado**",
-                f"Titulo: {title} | Perfil: {profile}",
-            ]
-            if plan_result and "plan" in plan_result:
-                lines.append(f"Plan: {str(plan_result.get('plan', ''))[:300]}")
-            if exec_result and exec_result.get("success"):
-                lines.append(f"Ejecucion: OK ({len(exec_result.get('files_modified', []))} archivos)")
-            if qa_result:
-                passed = qa_result.get("passed", False)
-                lines.append(f"QA: {'PASADO' if passed else 'FALLOS: ' + str(qa_result.get('issues', []))}")
-
-            return {"type": "action", "content": "\n".join(lines)}
-
+            return {"type": "action", "job_id": job_id,
+                    "content": f"**Job `{job_id[:8]}`**: {title}\nPerfil: {profile}\nEstado: esperando aprobacion"}
         except Exception as e:
             return {"type": "action", "content": f"Error: {str(e)[:200]}"}
 
@@ -118,7 +92,7 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
         lang = {"py": "python", "js": "javascript", "ts": "typescript", "md": "markdown"}.get(ext, "")
         return {"type": "action", "content": f"**{filename}** ({len(content)} chars):\n```{lang}\n{content[:3000]}\n```"}
 
-    # --- Listar archivos ---
+    # --- Listar ---
     if "lista" in lower and "archivo" in lower or lower in ("ls", "dir"):
         files = sorted(Path(workspace).iterdir())[:30]
         lines = [f"**Workspace**: `{workspace}`\n"]
@@ -131,38 +105,20 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
     # --- Git ---
     if "diff" in lower or "cambio" in lower:
         r = subprocess.run(["git", "diff", "--stat"], cwd=workspace, capture_output=True, text=True, timeout=10)
-        out = r.stdout.strip() or "No changes."
-        return {"type": "action", "content": f"**Git diff**:\n```\n{out[:2000]}\n```"}
+        return {"type": "action", "content": f"**Git diff**:\n```\n{r.stdout.strip() or 'No changes.'}\n```"}
 
     if "status" in lower or "git" in lower:
         r = subprocess.run(["git", "status", "--short"], cwd=workspace, capture_output=True, text=True, timeout=10)
-        out = r.stdout.strip() or "Clean."
         b = subprocess.run(["git", "branch", "--show-current"], cwd=workspace, capture_output=True, text=True, timeout=5)
-        return {"type": "action", "content": f"**Git** (`{b.stdout.strip()}`):\n```\n{out[:2000]}\n```"}
+        return {"type": "action", "content": f"**Git** (`{b.stdout.strip()}`):\n```\n{r.stdout.strip() or 'Clean.'}\n```"}
 
     # --- Ayuda ---
     if any(w in lower for w in ["ayuda", "help", "que podes", "comandos"]):
-        return {"type": "action", "content": (
-            f"**Inti** - Workspace: `{workspace}`\n\n"
-            "`crea landing page` → Job en pipeline FSM\n"
-            "`crea un archivo X` → Archivo en workspace\n"
-            "`crea una carpeta X` → Carpeta\n"
-            "`lee el archivo X` → Leer\n"
-            "`crea sesion builder` → Agente\n"
-            "`lista archivos` `git diff` `git status`\n"
-            "`/stream X` → Gemini streaming\n"
-        )}
+        return {"type": "action", "content": "**Inti** - Workspace: `" + workspace + "`\n\n`crea landing page` `lee archivo` `lista archivos` `crea sesion` `git status` `ayuda`"}
 
     # --- Comando no reconocido ---
     if any(first == w for w in verbs):
         return {"type": "action", "content": "No entiendo ese comando. Escribi `ayuda` para ver que puedo hacer."}
 
     # --- Conversacion → LLM ---
-    try:
-        from inti.memory import MemoryContext
-        ctx = await MemoryContext.get_context_for_job(None, "pro_mix")
-        if ctx and "[DUMMY]" not in ctx:
-            return {"type": "chat", "content": f"{ctx}\n\n## Mensaje\n{message}"}
-    except Exception:
-        pass
     return {"type": "chat", "content": message}

@@ -116,7 +116,14 @@ async def websocket_endpoint(websocket: WebSocket):
             cmd_result = await execute_chat_command(workspace, content)
 
             if cmd_result["type"] == "action":
-                await websocket.send_json({"event_type": "chat_response", "payload": {"content": cmd_result["content"], "model": "inti-action"}})
+                await websocket.send_json({
+                    "event_type": "chat_response",
+                    "payload": {
+                        "content": cmd_result["content"],
+                        "model": "inti-action",
+                        "job_id": cmd_result.get("job_id", ""),
+                    }
+                })
 
                 # Si creo un job → stream OpenCode via bridge
                 is_job = "job" in cmd_result.get("content", "").lower()
