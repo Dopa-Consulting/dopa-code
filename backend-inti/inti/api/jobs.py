@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -83,10 +83,10 @@ async def get_job(job_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("/")
 async def create_job(
-    title: str,
-    description: str = "",
-    profile: TaskProfile = "pro_mix",
-    autonomy_level: AutonomyLevel = "human_gatekeeper",
+    title: str = Body(...),
+    description: str = Body(""),
+    profile: TaskProfile = Body("pro_mix"),
+    autonomy_level: AutonomyLevel = Body("human_gatekeeper"),
     db: AsyncSession = Depends(get_db),
 ):
     job = Job(
