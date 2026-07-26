@@ -123,10 +123,33 @@ async def websocket_endpoint(websocket: WebSocket):
                         user_input=content,
                         system_instruction="Eres Inti, el agente andino de Dopa Code. Dopa Code es un entorno de desarrollo agentico Local-First que orquesta la escritura, revision y despliegue de codigo desde una PC, controlado desde una PWA movil. NO es sobre dopamina ni neurociencia. Responde en español.",
                     )
-                    await websocket.send_json({
-                        "event_type": "chat_response",
-                        "payload": {"content": result.get("output", result.get("error", "Sin respuesta"))}
-                    })
+                    if "error" not in result:
+                        await websocket.send_json({
+                            "event_type": "chat_response",
+                            "payload": {"content": result.get("output", ""), "model": result.get("model", "gemini"), "usage": result.get("usage", {})}
+                        })
+                    else:
+                        # Gemini fallo, cae a OpenRouter
+                        from inti.openrouter_client import openrouter
+                        if openrouter.is_configured:
+                            or_result = await openrouter.chat(
+                                model="deepseek/deepseek-chat",
+                                messages=[{"role": "user", "content": content}],
+                                max_tokens=1000,
+                            )
+                            await websocket.send_json({
+                                "event_type": "chat_response",
+                                "payload": {
+                                    "content": or_result.get("content", or_result.get("error", "Error")),
+                                    "model": "openrouter (gemini fallback)",
+                                    "usage": or_result.get("usage", {}),
+                                }
+                            })
+                        else:
+                            await websocket.send_json({
+                                "event_type": "error",
+                                "payload": {"error": result.get("error", "Unknown error")}
+                            })
                 else:
                     # Fallback to OpenRouter
                     from inti.openrouter_client import openrouter
