@@ -33,6 +33,19 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
         except Exception as e:
             return {"type": "action", "content": f"Error: {e}"}
 
+    # --- Crear carpeta ---
+    if "crea" in lower and ("carpeta" in lower or "directorio" in lower or "mkdir" in lower):
+        idx = max(lower.find("carpeta") if "carpeta" in lower else -1,
+                  lower.find("directorio") if "directorio" in lower else -1,
+                  lower.find("mkdir") if "mkdir" in lower else -1)
+        rest = msg[idx:].split(" ", 1)[-1] if " " in msg[idx:] else ""
+        dirname = rest.strip().strip("'\"")
+        if not dirname:
+            return {"type": "action", "content": "Cual carpeta?"}
+        dirpath = Path(workspace) / dirname
+        dirpath.mkdir(parents=True, exist_ok=True)
+        return {"type": "action", "content": f"**Carpeta creada**: `{dirpath}`"}
+
     # --- Crear archivo ---
     if "crea" in lower and "archivo" in lower:
         # Extraer nombre: buscar palabra despues de "archivo"
@@ -121,6 +134,23 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
                     "- `git status` - Estado del repo\n"
                     "- `/stream X` - Streaming Gemini en vivo\n"
                 ).format(workspace=workspace)}
+
+    # --- Mensaje que parece comando pero no se reconocio ---
+    action_words = ["crea", "lee", "lista", "borra", "ejecuta", "deploy", "merge", "corre", "abre", "inicia", "muestra"]
+    if any(lower.startswith(w) or f" {w} " in f" {lower} " for w in action_words):
+        return {"type": "action",
+                "content": (
+                    "No reconozco ese comando.\n\n"
+                    "**Comandos disponibles**:\n"
+                    "- `crea un archivo X`\n"
+                    "- `crea una carpeta X`\n"
+                    "- `lee el archivo X`\n"
+                    "- `lista archivos`\n"
+                    "- `crea sesion builder`\n"
+                    "- `git diff` / `git status`\n"
+                    "- `/stream X` (Gemini en vivo)\n"
+                    "- Cualquier otra cosa: conversacion con LLM"
+                )}
 
     # --- No es comando → LLM ---
     return {"type": "chat", "content": message}
