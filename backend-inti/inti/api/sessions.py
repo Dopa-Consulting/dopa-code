@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Body
 
 from inti.orchestrator import orchestrator, AgentRole, SessionStatus
 
@@ -42,10 +42,10 @@ async def list_roles():
 
 @router.post("/")
 async def create_session(
-    role: str = "builder",
-    model: str | None = None,
-    provider: str | None = None,
-    workspace_path: str | None = None,
+    role: str = Body("builder"),
+    model: str | None = Body(None),
+    provider: str | None = Body(None),
+    workspace_path: str | None = Body(None),
 ):
     if role not in ["architect", "builder", "reviewer", "deployer", "custom"]:
         return {"error": f"Invalid role: {role}. Use: architect, builder, reviewer, deployer, custom"}
