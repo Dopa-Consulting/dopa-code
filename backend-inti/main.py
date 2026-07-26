@@ -118,9 +118,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "event_type": "chat_response",
                         "payload": {"content": cmd_result["content"], "model": "inti-action"}
                     })
-                    continue
-
-                # 2. Si no es comando → LLM
+                elif cmd_result["type"] == "chat":
                 from inti.gemini_interactions import gemini_interactions
                 from inti.gemini_interactions import gemini_interactions
 
