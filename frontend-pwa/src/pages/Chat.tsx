@@ -14,7 +14,8 @@ interface Message {
 
 const WELCOME: Message = {
   id: "welcome", role: "intl",
-  content: "**Dopa Code** - Inti, agente andino.\n\nEscribe `Hola Inti` o `/stream <pregunta>`",
+  content: "**Dopa Code** - Inti, agente andino.\n\n"
+    + "Comandos: `crea un archivo X`, `lee el archivo X`, `lista archivos`, `crea sesion builder`, `git diff`, `Hola Inti`, `/stream X`",
   timestamp: new Date().toISOString(),
 };
 
