@@ -47,12 +47,39 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
                 session.add(job)
                 await session.commit()
                 await session.refresh(job)
+                job_id = job.id
 
             from inti.audit import log_action
-            await log_action(actor_type="human", action="created_job", job_id=job.id, summary=title)
+            await log_action(actor_type="human", action="created_job", job_id=job_id, summary=title)
 
-            return {"type": "action",
-                    "content": f"**Job `{job.id[:8]}` creado**\n{title}\nPerfil: {profile}\nEstado: planned"}
+            # Ejecutar pipeline FSM real
+            from inti.agent_runtime import agent_runtime
+            plan_result = await agent_runtime.plan_change(job_id, msg)
+            exec_result = await agent_runtime.apply_change(job_id, plan_result, f"intl/{job_id[:8]}")
+            diff_result = await agent_runtime.generate_diff(job_id, f"intl/{job_id[:8]}")
+            qa_result = await agent_runtime.run_qa_review(job_id, diff_result.get("diff_text", ""))
+
+            # PostMortem
+            try:
+                from inti.memory import PostMortem
+                await PostMortem.run(job_id)
+            except Exception:
+                pass
+
+            lines = [
+                f"**Job `{job_id[:8]}` completado**",
+                f"Titulo: {title} | Perfil: {profile}",
+            ]
+            if plan_result and "plan" in plan_result:
+                lines.append(f"Plan: {str(plan_result.get('plan', ''))[:300]}")
+            if exec_result and exec_result.get("success"):
+                lines.append(f"Ejecucion: OK ({len(exec_result.get('files_modified', []))} archivos)")
+            if qa_result:
+                passed = qa_result.get("passed", False)
+                lines.append(f"QA: {'PASADO' if passed else 'FALLOS: ' + str(qa_result.get('issues', []))}")
+
+            return {"type": "action", "content": "\n".join(lines)}
+
         except Exception as e:
             return {"type": "action", "content": f"Error: {str(e)[:200]}"}
 
