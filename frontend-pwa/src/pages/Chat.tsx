@@ -25,7 +25,10 @@ export default function Chat() {
   const { connected, subscribe, send } = useWebSocket(WS_URL);
   const [messages, setMessages] = useState<Message[]>(loadMsgs);
   const [input, setInput] = useState("");
+  const [clickedJobs, setClickedJobs] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   useEffect(() => {
     if (messages.length > 1) {
@@ -69,6 +72,8 @@ export default function Chat() {
   const copy = (text: string) => { navigator.clipboard.writeText(text).catch(() => {}); };
 
   const handleApprove = async (jobId: string) => {
+    if (clickedJobs.has(jobId)) return;
+    setClickedJobs((prev) => new Set(prev).add(jobId));
     const r = await fetch(`/api/v1/jobs/${jobId}/approve`, { method: "POST" });
     if (r.ok) {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "system", content: `Job #${jobId.slice(0,8)} aprobado.`, timestamp: new Date().toISOString(), jobId }]);
@@ -76,6 +81,8 @@ export default function Chat() {
   };
 
   const handleReject = async (jobId: string) => {
+    if (clickedJobs.has(jobId)) return;
+    setClickedJobs((prev) => new Set(prev).add(jobId));
     const r = await fetch(`/api/v1/jobs/${jobId}/reject`, { method: "POST" });
     if (r.ok) {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "system", content: `Job #${jobId.slice(0,8)} rechazado.`, timestamp: new Date().toISOString(), jobId }]);
@@ -144,12 +151,14 @@ export default function Chat() {
             {m.jobId && m.role === "intl" && (
               <div className="flex gap-2 mt-3">
                 <button onClick={() => handleApprove(m.jobId!)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
-                  ✓ Approve
+                  disabled={clickedJobs.has(m.jobId)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-900 disabled:text-emerald-500 text-white transition-colors">
+                  {clickedJobs.has(m.jobId) ? "Aprobado" : "Approve"}
                 </button>
                 <button onClick={() => handleReject(m.jobId!)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white transition-colors">
-                  ✗ Reject
+                  disabled={clickedJobs.has(m.jobId)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 disabled:bg-red-900 disabled:text-red-500 text-white transition-colors">
+                  {clickedJobs.has(m.jobId) ? "Rechazado" : "Reject"}
                 </button>
               </div>
             )}
