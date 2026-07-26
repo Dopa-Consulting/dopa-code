@@ -107,8 +107,21 @@ async def websocket_endpoint(websocket: WebSocket):
             if data.get("type") == "chat":
                 content = data.get("content", "")
                 use_stream = data.get("stream", False)
+                workspace = str(Path.cwd())  # workspace actual
 
-                # Try Gemini Interactions API first
+                # 1. Primero: intentar ejecutar como comando real
+                from inti.chat_commands import execute_chat_command
+
+                cmd_result = await execute_chat_command(workspace, content)
+                if cmd_result["type"] == "action":
+                    await websocket.send_json({
+                        "event_type": "chat_response",
+                        "payload": {"content": cmd_result["content"], "model": "inti-action"}
+                    })
+                    continue
+
+                # 2. Si no es comando → LLM
+                from inti.gemini_interactions import gemini_interactions
                 from inti.gemini_interactions import gemini_interactions
 
                 if gemini_interactions.is_configured and use_stream:
