@@ -81,6 +81,28 @@ from inti.router import api_router
 app.include_router(api_router)
 
 
+# --- Auth middleware (protege todo menos /health y /login) ---
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
+
+PUBLIC_PATHS = ["/health", "/login", "/favicon.svg", "/manifest.json", "/sw.js", "/assets"]
+
+@app.middleware("http")
+async def auth_middleware(request, call_next):
+    path = request.url.path
+    if any(path.startswith(p) for p in PUBLIC_PATHS):
+        return await call_next(request)
+
+    token = request.cookies.get("dopa_token") or request.headers.get("x-dopa-token") or request.query_params.get("token")
+    if token == settings.access_token:
+        return await call_next(request)
+
+    if path == "/" or path == "/login":
+        return await call_next(request)
+
+    return JSONResponse({"error": "Unauthorized", "login": "/?token=YOUR_TOKEN"}, status_code=401)
+
+
 @app.get("/health")
 async def health_check():
     return {

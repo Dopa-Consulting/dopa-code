@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     easypanel_deploy_token: str = ""
     easypanel_endpoint: str = "https://easypanel.io"
 
+    access_token: str = "cambiar-en-produccion"
+
     model_config = {"env_prefix": "DOPA_", "env_file": ".env"}
 
 
