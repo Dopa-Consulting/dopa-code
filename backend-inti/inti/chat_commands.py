@@ -33,27 +33,28 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
         except Exception as e:
             return {"type": "action", "content": f"Error: {e}"}
 
-    # --- Crear un Job real que pasa por el pipeline FSM ---
-    if any(w in lower for w in ["crea un archivo", "crea archivo", "crea una carpeta", "crea carpeta",
-                                 "escribe", "modifica", "refactoriza", "agrega", "implementa",
-                                 "corrige", "arregla", "fixea", "optimiza", "mejora", "añade"]) \
-       and not any(w in lower for w in ["sesion", "job"]):
-
-        # Determinar el titulo del job
+    # --- Accion que empieza con verbo de tarea → crear Job real ---
+    task_verbs = ["crea", "hace", "haz", "hacerme", "escribe", "genera", "construye", "diseña", "implementa",
+                  "desarrolla", "codifica", "modifica", "refactoriza", "corrige", "arregla", "fixea",
+                  "añade", "agrega", "agregame", "haceme", "creame", "dame"]
+    first_word = lower.split(" ")[0] if " " in lower else lower
+    if any(first_word == v for v in task_verbs) and not any(w in lower for w in ["sesion", "carpeta", "directorio", "archivo", "folder", "mkdir", "directorio"]):
         title = msg[:80] + ("..." if len(msg) > 80 else "")
-        profile = "dopaweb_theme" if any(w in lower for w in ["web", "pagina", "tienda", "ecommerce", "frontend", "ui", "ux", "css", "html"]) else "pro_mix"
 
-        # Crear job via API
+        # Detectar perfil segun contenido
+        profile = "pro_mix"
+        if any(w in lower for w in ["web", "pagina", "landing", "sitio", "frontend", "ui", "ux", "css", "html", "react", "next", "design", "diseño"]):
+            profile = "dopaweb_theme"
+        elif any(w in lower for w in ["api", "backend", "endpoint", "servidor", "express", "fastapi"]):
+            profile = "dopa_backend"
+        elif any(w in lower for w in ["pago", "stripe", "mercadopago", "paypal", "checkout"]):
+            profile = "dopaweb_payment"
+
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     "http://localhost:8000/api/v1/jobs/",
-                    json={
-                        "title": title,
-                        "description": msg,
-                        "profile": profile,
-                        "autonomy_level": "human_gatekeeper",
-                    },
+                    json={"title": title, "description": msg, "profile": profile, "autonomy_level": "human_gatekeeper"},
                     timeout=5,
                 )
                 if resp.status_code != 200:
@@ -62,28 +63,23 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
                 data = resp.json()
                 job_id = data.get("job_id", "?")
 
-                # Iniciar el job (pipeline FSM)
-                resp2 = await client.post(
-                    f"http://localhost:8000/api/v1/jobs/{job_id}/start",
-                    timeout=5,
-                )
+                # Iniciar pipeline FSM
+                resp2 = await client.post(f"http://localhost:8000/api/v1/jobs/{job_id}/start", timeout=5)
                 start_data = resp2.json()
 
-                context_lines = [
-                    f"**Job creado e iniciado**: `{job_id[:8]}`",
+                lines = [
+                    f"**Job `{job_id[:8]}` iniciado**",
                     f"Titulo: {title}",
-                    f"Perfil: {profile}",
-                    f"Estado: {start_data.get('status', 'executing')}",
-                    f"Architect: {start_data.get('architect_model', '?')}",
+                    f"Perfil: {profile} | Modelo Architect: {start_data.get('architect_model', '?')}",
+                    f"Estado: pipeline FSM en ejecucion (Planner → Executor → QA)",
                 ]
                 if start_data.get("plan"):
-                    plan = start_data["plan"]
-                    context_lines.append(f"\nPlan generado:\n```\n{str(plan)[:500]}\n```")
+                    lines.append(f"\nPlan:\n```\n{str(start_data['plan'])[:600]}\n```")
 
-                return {"type": "action", "content": "\n".join(context_lines)}
+                return {"type": "action", "content": "\n".join(lines)}
 
         except Exception as e:
-            # Fallback: si la API no responde, hacer file I/O directo
+            # API caida → file I/O directo
             return await _direct_file_action(workspace, msg, lower)
 
     # --- Comandos de consulta ---
