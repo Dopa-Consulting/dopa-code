@@ -136,6 +136,41 @@ fi
         res.writeHead(200);
         res.end(JSON.stringify(result));
 
+      } else if (p === "/run-stream" && req.method === "POST") {
+        const body = await readBody(req);
+        const dir = body.directory || process.cwd();
+
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        });
+
+        const child = spawn("opencode", ["run", body.prompt], {
+          cwd: dir,
+          env: { ...process.env, OPENCODE_AGENT: body.agent || "build" },
+          stdio: ["pipe", "pipe", "pipe"],
+          timeout: 120000,
+        });
+
+        child.stdout.on("data", (data) => {
+          const text = data.toString();
+          const lines = text.split("\n").filter(Boolean);
+          for (const line of lines) {
+            res.write(`data: ${JSON.stringify({ type: "stdout", text: line })}\n\n`);
+          }
+        });
+
+        child.stderr.on("data", (data) => {
+          const text = data.toString();
+          res.write(`data: ${JSON.stringify({ type: "stderr", text })}\n\n`);
+        });
+
+        child.on("close", (code) => {
+          res.write(`data: ${JSON.stringify({ type: "exit", code })}\n\n`);
+          res.end();
+        });
+
       } else if (p === "/diff-stat" && req.method === "GET") {
         const dir = url.searchParams.get("directory") || process.cwd();
         const result = await getGitDiff(dir);

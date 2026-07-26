@@ -111,13 +111,64 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # 1. Primero: intentar ejecutar como comando real
                 from inti.chat_commands import execute_chat_command
-
                 cmd_result = await execute_chat_command(workspace, content)
+
                 if cmd_result["type"] == "action":
-                    await websocket.send_json({
-                        "event_type": "chat_response",
-                        "payload": {"content": cmd_result["content"], "model": "inti-action"}
-                    })
+                    # Si es un comando que crea un job → ejecutar OpenCode en vivo
+                    if "job" in cmd_result.get("content", "").lower() or "cread" in cmd_result.get("content", "").lower():
+                        await websocket.send_json({
+                            "event_type": "chat_response",
+                            "payload": {"content": cmd_result["content"], "model": "inti-action"}
+                        })
+                        # Ejecutar OpenCode via bridge y streamear output
+                        await websocket.send_json({
+                            "event_type": "step.start",
+                            "data": {"type": "opencode"}
+                        })
+                        try:
+                            import httpx
+                            async with httpx.AsyncClient(timeout=120.0) as client:
+                                async with client.stream(
+                                    "POST", "http://localhost:4097/run-stream",
+                                    headers={"x-bridge-token": "dopa-bridge-local-dev"},
+                                    json={"prompt": content, "directory": workspace, "agent": "build"},
+                                ) as resp:
+                                    async for line in resp.aiter_lines():
+                                        if line.startswith("data: "):
+                                            try:
+                                                chunk = json.loads(line[6:])
+                                                await websocket.send_json({
+                                                    "event_type": "step.delta",
+                                                    "data": chunk
+                                                })
+                                            except Exception:
+                                                pass
+                        except Exception as e:
+                            await websocket.send_json({
+                                "event_type": "error",
+                                "payload": {"error": f"Bridge error: {str(e)[:200]}"}
+                            })
+                        # Git diff despues de OpenCode
+                        try:
+                            r = subprocess.run(["git", "diff", "--stat"], cwd=workspace,
+                                              capture_output=True, text=True, timeout=10)
+                            if r.stdout.strip():
+                                await websocket.send_json({
+                                    "event_type": "chat_response",
+                                    "payload": {"content": "**Git diff**:\n```\n" + r.stdout.strip()[:2000] + "\n```", "model": "git"}
+                                })
+                        except Exception:
+                            pass
+                        await websocket.send_json({
+                            "event_type": "step.stop",
+                            "data": {"index": 0}
+                        })
+                    else:
+                        await websocket.send_json({
+                            "event_type": "chat_response",
+                            "payload": {"content": cmd_result["content"], "model": "inti-action"}
+                        })
+
                 elif cmd_result["type"] == "chat":
                 from inti.gemini_interactions import gemini_interactions
                 from inti.gemini_interactions import gemini_interactions
