@@ -65,7 +65,9 @@ class AgentRuntime:
                     job.status = status
                     await session.commit()
         except Exception:
-            pass(self, job_id: str, prompt: str) -> str:
+            pass
+
+    async def _inject_erp_context(self, job_id: str, prompt: str) -> str:
         try:
             from inti.database import async_session
             from inti.models.job import Job
