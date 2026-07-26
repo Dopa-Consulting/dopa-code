@@ -54,7 +54,7 @@ async def execute_chat_command(workspace: str, message: str) -> dict:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     "http://localhost:8000/api/v1/jobs/",
-                    json={"title": title, "description": msg, "profile": profile, "autonomy_level": "human_gatekeeper"},
+                    json={"title": title, "description": msg, "project_type": profile, "autonomy_level": "human_gatekeeper"},
                     timeout=5,
                 )
                 if resp.status_code != 200:

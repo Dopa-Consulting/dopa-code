@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from inti.database import get_db
 from inti.models.job import Job
 from inti.models.diff import Diff
-from inti.policies import TaskProfile, AutonomyLevel, get_profile, PROFILES
+from inti.policies import TaskProfile, AutonomyLevel, ProjectType, get_profile, PROFILES
 from inti.events import job_state_changed, diff_ready
 
 router = APIRouter()
@@ -86,13 +86,15 @@ async def create_job(
     title: str = Body(...),
     description: str = Body(""),
     profile: TaskProfile = Body("pro_mix"),
+    project_type: str = Body(""),
     autonomy_level: AutonomyLevel = Body("human_gatekeeper"),
     db: AsyncSession = Depends(get_db),
 ):
+    actual_profile = project_type if project_type else profile
     job = Job(
         title=title,
         description=description,
-        profile=profile,
+        profile=actual_profile,
         autonomy_level=autonomy_level,
         status="planned",
     )
