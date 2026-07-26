@@ -1,212 +1,141 @@
-"""Inti Chat → Pipeline FSM real. Cada comando crea un Job que pasa por el pipeline completo."""
+"""Inti Chat Commands - Acceso directo a DB (sin HTTP loopback)."""
 
-import asyncio
 import json
 import re
 import subprocess
 from pathlib import Path
 
-import httpx
-
 from inti.config import settings
-
-BRIDGE_URL = "http://localhost:4097"
-BRIDGE_TOKEN = "dopa-bridge-local-dev"
+from inti.database import async_session
+from inti.models.job import Job
 
 
 async def execute_chat_command(workspace: str, message: str) -> dict:
     msg = message.strip()
     lower = msg.lower()
 
-    # --- Crear sesion (orchestrator real) ---
+    # --- Crear sesion ---
     if "crea" in lower and "sesion" in lower:
         role = "builder" if ("builder" in lower or "build" in lower) else "architect"
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    "http://localhost:8000/api/v1/sessions/",
-                    json={"role": role}, timeout=5,
-                )
-                data = resp.json()
-                sid = data.get("session_id", "OK")
-                return {"type": "action", "content": f"**Sesion {role} creada**: `{sid}`\nModelo: {data.get('model', 'default')}"}
+            from inti.orchestrator import orchestrator
+            session = orchestrator.create_session(role=role)
+            return {"type": "action",
+                    "content": f"**Sesion {role} creada**: `{session.id}`\nModelo: {session.model}"}
         except Exception as e:
             return {"type": "action", "content": f"Error: {e}"}
 
-    # --- Accion que empieza con verbo de tarea → crear Job real ---
-    task_verbs = ["crea", "hace", "haz", "hacerme", "escribe", "genera", "construye", "diseña", "implementa",
-                  "desarrolla", "codifica", "modifica", "refactoriza", "corrige", "arregla", "fixea",
-                  "añade", "agrega", "agregame", "haceme", "creame", "dame"]
-    first_word = lower.split(" ")[0] if " " in lower else lower
-    if any(first_word == v for v in task_verbs) and not any(w in lower for w in ["sesion", "carpeta", "directorio", "archivo", "folder", "mkdir", "directorio"]):
+    # --- Crear Job real (cualquier tarea que empiece con verbo) ---
+    verbs = ["crea", "hace", "haz", "genera", "construye", "diseña", "implementa",
+             "desarrolla", "codifica", "modifica", "refactoriza", "corrige", "arregla",
+             "añade", "agrega", "escribe"]
+    first = lower.split(" ")[0] if " " in lower else lower
+    if first in verbs and not any(w in lower for w in ["sesion", "carpeta", "directorio", "archivo", "folder"]):
         title = msg[:80] + ("..." if len(msg) > 80 else "")
-
-        # Detectar perfil segun contenido
         profile = "pro_mix"
-        if any(w in lower for w in ["web", "pagina", "landing", "sitio", "frontend", "ui", "ux", "css", "html", "react", "next", "design", "diseño"]):
+        if any(w in lower for w in ["web", "landing", "pagina", "sitio", "frontend", "ui", "ux", "css", "html", "react", "design"]):
             profile = "dopaweb_theme"
-        elif any(w in lower for w in ["api", "backend", "endpoint", "servidor", "express", "fastapi"]):
+        elif any(w in lower for w in ["api", "backend", "endpoint", "server"]):
             profile = "dopa_backend"
-        elif any(w in lower for w in ["pago", "stripe", "mercadopago", "paypal", "checkout"]):
+        elif any(w in lower for w in ["pago", "stripe", "mercadopago", "checkout"]):
             profile = "dopaweb_payment"
 
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    "http://localhost:8000/api/v1/jobs/",
-                    json={"title": title, "description": msg, "project_type": profile, "autonomy_level": "human_gatekeeper"},
-                    timeout=5,
-                )
-                if resp.status_code != 200:
-                    return {"type": "action", "content": f"Error al crear job: {resp.text[:200]}"}
+            async with async_session() as session:
+                job = Job(title=title, description=msg, profile=profile,
+                          autonomy_level="human_gatekeeper", status="planned")
+                session.add(job)
+                await session.commit()
+                await session.refresh(job)
 
-                data = resp.json()
-                job_id = data.get("job_id", "?")
+            from inti.audit import log_action
+            await log_action(actor_type="human", action="created_job", job_id=job.id, summary=title)
 
-                # Iniciar pipeline FSM
-                resp2 = await client.post(f"http://localhost:8000/api/v1/jobs/{job_id}/start", timeout=5)
-                start_data = resp2.json()
-
-                lines = [
-                    f"**Job `{job_id[:8]}` iniciado**",
-                    f"Titulo: {title}",
-                    f"Perfil: {profile} | Modelo Architect: {start_data.get('architect_model', '?')}",
-                    f"Estado: pipeline FSM en ejecucion (Planner → Executor → QA)",
-                ]
-                if start_data.get("plan"):
-                    lines.append(f"\nPlan:\n```\n{str(start_data['plan'])[:600]}\n```")
-
-                return {"type": "action", "content": "\n".join(lines)}
-
+            return {"type": "action",
+                    "content": f"**Job `{job.id[:8]}` creado**\n{title}\nPerfil: {profile}\nEstado: planned"}
         except Exception as e:
-            # API caida → file I/O directo
-            return await _direct_file_action(workspace, msg, lower)
+            return {"type": "action", "content": f"Error: {str(e)[:200]}"}
 
-    # --- Comandos de consulta ---
-    if "lee" in lower and "archivo" in lower:
-        return await _read_file(workspace, msg, lower)
-    if "lista" in lower and "archivo" in lower or lower in ("ls", "dir"):
-        return await _list_files(workspace)
-    if "diff" in lower or "cambio" in lower:
-        return await _git_diff(workspace)
-    if "status" in lower or "git" in lower:
-        return await _git_status(workspace)
-    if any(w in lower for w in ["ayuda", "help", "que podes hacer", "comandos"]):
-        return await _help(workspace)
-
-    # --- Comando no reconocido ---
-    action_words = ["crea", "lee", "lista", "borra", "ejecuta", "deploy", "merge", "corre", "abre", "inicia"]
-    if any(lower.startswith(w) or f" {w} " in f" {lower} " for w in action_words):
-        return {"type": "action",
-                "content": f"No reconozco ese comando.\n\n**Inti puede**: crear archivos, leer archivos, crear carpetas, crear sesiones de agente, ejecutar jobs con pipeline FSM, git diff, git status. Escribi `ayuda` para ver todos los comandos."}
-
-    # --- Conversacion: LLM con contexto de memoria y skills ---
-    enriched = await _enrich_with_context(msg)
-    return {"type": "chat", "content": enriched}
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-async def _direct_file_action(workspace: str, msg: str, lower: str) -> dict:
-    """Fallback: file I/O directo cuando la API no responde."""
-    if "archivo" in lower:
+    # --- Crear archivo ---
+    if "archivo" in lower and any(w in lower for w in ["crea", "escribe"]):
         idx = lower.find("archivo")
         rest = msg[idx + 7:].strip().lstrip("con nombre ").strip("'\"")
         filename = rest.split("\n")[0].split(" en ")[0].strip() or "nuevo.md"
         filepath = Path(workspace) / filename
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        content = f"# {filename}\n\nCreado por Inti - Dopa Code\n"
-        filepath.write_text(content, encoding="utf-8")
-        return {"type": "action", "content": f"**Archivo creado** (modo directo): `{filepath}`"}
-    if "carpeta" in lower or "directorio" in lower:
-        idx = max(lower.find("carpeta") if "carpeta" in lower else -1,
-                  lower.find("directorio") if "directorio" in lower else -1)
-        rest = msg[idx:].split(" ", 1)[-1] if " " in msg[idx:] else ""
-        dirname = rest.strip().strip("'\"") or "nueva"
-        dirpath = Path(workspace) / dirname
-        dirpath.mkdir(parents=True, exist_ok=True)
-        return {"type": "action", "content": f"**Carpeta creada** (modo directo): `{dirpath}`"}
-    return {"type": "action", "content": "No pude procesar esa accion."}
+        filepath.write_text(f"# {filename}\n\nCreado por Inti\n", encoding="utf-8")
+        return {"type": "action", "content": f"**Archivo creado**: `{filepath}`"}
 
+    # --- Crear carpeta ---
+    if any(w in lower for w in ["carpeta", "directorio", "mkdir"]) and "crea" in lower:
+        for kw in ["carpeta", "directorio", "mkdir"]:
+            if kw in lower:
+                idx = lower.find(kw)
+                rest = msg[idx + len(kw):].strip().strip("'\"") or "nueva"
+                dirpath = Path(workspace) / rest
+                dirpath.mkdir(parents=True, exist_ok=True)
+                return {"type": "action", "content": f"**Carpeta creada**: `{dirpath}`"}
 
-async def _read_file(workspace: str, msg: str, lower: str) -> dict:
-    idx = lower.find("archivo")
-    rest = msg[idx + 7:].strip().strip("'\"")
-    filename = rest.split("\n")[0].split(" ")[0].strip()
-    if not filename:
-        return {"type": "action", "content": "Cual archivo?"}
-    filepath = Path(workspace) / filename
-    if not filepath.exists():
-        return {"type": "action", "content": f"**{filename}** no encontrado en `{workspace}`"}
-    content = filepath.read_text(encoding="utf-8")
-    ext = filename.split(".")[-1] if "." in filename else ""
-    lang_map = {"py": "python", "js": "javascript", "ts": "typescript", "tsx": "tsx", "md": "markdown", "json": "json"}
-    lang = lang_map.get(ext, "")
-    return {"type": "action", "content": f"**{filename}** ({len(content)} chars):\n\n```{lang}\n{content[:3000]}\n```"}
+    # --- Leer archivo ---
+    if "lee" in lower and "archivo" in lower:
+        idx = lower.find("archivo")
+        rest = msg[idx + 7:].strip().strip("'\"")
+        filename = rest.split("\n")[0].split(" ")[0].strip()
+        if not filename:
+            return {"type": "action", "content": "Cual archivo?"}
+        filepath = Path(workspace) / filename
+        if not filepath.exists():
+            return {"type": "action", "content": f"**{filename}** no encontrado"}
+        content = filepath.read_text(encoding="utf-8")
+        ext = filename.split(".")[-1] if "." in filename else ""
+        lang = {"py": "python", "js": "javascript", "ts": "typescript", "md": "markdown"}.get(ext, "")
+        return {"type": "action", "content": f"**{filename}** ({len(content)} chars):\n```{lang}\n{content[:3000]}\n```"}
 
-
-async def _list_files(workspace: str) -> dict:
-    try:
+    # --- Listar archivos ---
+    if "lista" in lower and "archivo" in lower or lower in ("ls", "dir"):
         files = sorted(Path(workspace).iterdir())[:30]
         lines = [f"**Workspace**: `{workspace}`\n"]
         for f in files:
             if not f.name.startswith("."):
-                suffix = "/" if f.is_dir() else f" ({f.stat().st_size} bytes)"
-                lines.append(f"- {f.name}{suffix}")
+                s = "/" if f.is_dir() else f" ({f.stat().st_size} bytes)"
+                lines.append(f"- {f.name}{s}")
         return {"type": "action", "content": "\n".join(lines)}
-    except Exception as e:
-        return {"type": "action", "content": f"Error: {e}"}
 
-
-async def _git_diff(workspace: str) -> dict:
-    try:
-        result = subprocess.run(["git", "diff", "--stat"], cwd=workspace,
-                                capture_output=True, text=True, timeout=10)
-        out = result.stdout.strip() or "Working tree limpio."
+    # --- Git ---
+    if "diff" in lower or "cambio" in lower:
+        r = subprocess.run(["git", "diff", "--stat"], cwd=workspace, capture_output=True, text=True, timeout=10)
+        out = r.stdout.strip() or "No changes."
         return {"type": "action", "content": f"**Git diff**:\n```\n{out[:2000]}\n```"}
-    except Exception as e:
-        return {"type": "action", "content": f"Error: {e}"}
 
+    if "status" in lower or "git" in lower:
+        r = subprocess.run(["git", "status", "--short"], cwd=workspace, capture_output=True, text=True, timeout=10)
+        out = r.stdout.strip() or "Clean."
+        b = subprocess.run(["git", "branch", "--show-current"], cwd=workspace, capture_output=True, text=True, timeout=5)
+        return {"type": "action", "content": f"**Git** (`{b.stdout.strip()}`):\n```\n{out[:2000]}\n```"}
 
-async def _git_status(workspace: str) -> dict:
-    try:
-        result = subprocess.run(["git", "status", "--short"], cwd=workspace,
-                                capture_output=True, text=True, timeout=10)
-        out = result.stdout.strip() or "Limpio."
-        branch = subprocess.run(["git", "branch", "--show-current"], cwd=workspace,
-                                capture_output=True, text=True, timeout=5)
-        return {"type": "action", "content": f"**Git** (`{branch.stdout.strip()}`):\n```\n{out[:2000]}\n```"}
-    except Exception:
-        return {"type": "action", "content": "No es un repo git o error."}
+    # --- Ayuda ---
+    if any(w in lower for w in ["ayuda", "help", "que podes", "comandos"]):
+        return {"type": "action", "content": (
+            f"**Inti** - Workspace: `{workspace}`\n\n"
+            "`crea landing page` → Job en pipeline FSM\n"
+            "`crea un archivo X` → Archivo en workspace\n"
+            "`crea una carpeta X` → Carpeta\n"
+            "`lee el archivo X` → Leer\n"
+            "`crea sesion builder` → Agente\n"
+            "`lista archivos` `git diff` `git status`\n"
+            "`/stream X` → Gemini streaming\n"
+        )}
 
+    # --- Comando no reconocido ---
+    if any(first == w for w in verbs):
+        return {"type": "action", "content": "No entiendo ese comando. Escribi `ayuda` para ver que puedo hacer."}
 
-async def _help(workspace: str) -> dict:
-    return {"type": "action",
-            "content": (
-                f"**Inti** - Agente andino de Dopa Code\n"
-                f"Workspace: `{workspace}`\n\n"
-                "**Comandos** (crean Jobs reales con pipeline FSM):\n"
-                "- `crea un archivo X` → Job → Planner → Executor → archivo\n"
-                "- `crea una carpeta X` → carpeta en workspace\n"
-                "- `lee el archivo X` → leer contenido\n"
-                "- `lista archivos` → ver workspace\n"
-                "- `crea sesion builder/architect` → sesion de agente\n"
-                "- `git diff` / `git status`\n"
-                "- `/stream X` → Gemini streaming\n"
-                "- Preguntame cualquier cosa\n\n"
-                "Cada job ejecutado aprende: PostMortem → lecciones → memoria."
-            )}
-
-
-async def _enrich_with_context(prompt: str) -> str:
-    """Enriquece el prompt con contexto de memoria, skills y ERP si aplica."""
+    # --- Conversacion → LLM ---
     try:
         from inti.memory import MemoryContext
         ctx = await MemoryContext.get_context_for_job(None, "pro_mix")
         if ctx and "[DUMMY]" not in ctx:
-            return f"{ctx}\n\n## Mensaje\n{prompt}"
+            return {"type": "chat", "content": f"{ctx}\n\n## Mensaje\n{message}"}
     except Exception:
         pass
-    return prompt
+    return {"type": "chat", "content": message}
