@@ -9,30 +9,30 @@ function LoginGate() {
   useEffect(() => {
     const saved = localStorage.getItem("dopa-token") || new URLSearchParams(location.search).get("token");
     if (saved) {
+      setToken(saved);
       localStorage.setItem("dopa-token", saved);
-      verify(saved);
+      fetch(`/login?token=${encodeURIComponent(saved)}`)
+        .then(r => { if (r.ok) setAuthed(true); })
+        .catch(() => {});
     }
   }, []);
 
-  const verify = async (t: string) => {
-    try {
-      const r = await fetch("/api/v1/health/", { headers: { "x-dopa-token": t } });
-      if (r.ok) setAuthed(true); else setAuthed(false);
-    } catch { setAuthed(false); }
-  };
-
   const login = async () => {
-    await verify(token);
-    if (!authed) {
-      try {
-        const r = await fetch("/api/v1/health/", { headers: { "x-dopa-token": token } });
-        if (r.ok) { localStorage.setItem("dopa-token", token); setAuthed(true); setError(""); }
-        else setError("Token invalido");
-      } catch { setError("Error de conexion"); }
+    try {
+      const r = await fetch(`/login?token=${encodeURIComponent(token)}`);
+      if (r.ok) {
+        localStorage.setItem("dopa-token", token);
+        setAuthed(true);
+        setError("");
+      } else {
+        setError("Token invalido");
+      }
+    } catch {
+      setError("Error de conexion");
     }
   };
 
-  if (authed) return <MainLayout token={token} />;
+  if (authed) return <MainLayout />;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-dvh p-6 text-center">
@@ -52,7 +52,7 @@ function LoginGate() {
   );
 }
 
-function MainLayout({ token }: { token: string }) {
+function MainLayout() {
   return (
     <div className="flex flex-col min-h-dvh">
       <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800">

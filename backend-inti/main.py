@@ -113,6 +113,15 @@ async def health_check():
     }
 
 
+@app.get("/login")
+async def login(token: str = ""):
+    if token == settings.access_token:
+        resp = JSONResponse({"status": "ok"})
+        resp.set_cookie("dopa_token", token, httponly=False, max_age=86400 * 30)
+        return resp
+    return JSONResponse({"error": "Invalid token"}, status_code=401)
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -279,7 +288,7 @@ if getattr(sys, "frozen", False):
     frontend_dist = Path(sys._MEIPASS) / "frontend"
 
 if frontend_dist.exists() and (frontend_dist / "index.html").exists():
-    from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
     # Catch-all: serve index.html for SPA client-side routing
     @app.get("/{full_path:path}")
