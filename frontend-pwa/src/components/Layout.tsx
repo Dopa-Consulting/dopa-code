@@ -18,14 +18,15 @@ export default function Layout() {
 
       <nav className="flex border-t border-slate-800 bg-slate-900">
         {[
-          { to: "/chat", label: "Chat", icon: "O" },
-          { to: "/", label: "Dashboard", icon: "=" },
+          { to: "/", label: "Chat", icon: "O" },
           { to: "/jobs", label: "Jobs", icon: "[]" },
+          { to: "/sessions", label: "Sesiones", icon: "S" },
           { to: "/models", label: "Modelos", icon: "AI" },
         ].map(({ to, label, icon }) => (
           <NavLink
             key={to}
             to={to}
+            end={to === "/"}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center py-3 text-xs gap-1 transition-colors ${
                 isActive ? "text-amber-400" : "text-slate-500"
