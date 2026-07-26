@@ -14,8 +14,7 @@ interface Message {
 
 const WELCOME: Message = {
   id: "welcome", role: "intl",
-  content: "**Dopa Code** - Inti, agente andino.\n\n"
-    + "Comandos: `crea un archivo X`, `lee el archivo X`, `lista archivos`, `crea sesion builder`, `git diff`, `Hola Inti`, `/stream X`",
+  content: "**Dopa Code** - Inti\nWorkspace: `D:\\Dopa\\01_Desarrollo\\dopa-code\\backend-inti`\n\n`crea landing page` `lee archivo` `lista archivos` `git status` `/stream X`",
   timestamp: new Date().toISOString(),
 };
 
@@ -32,7 +31,15 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const parent = el.parentElement;
+    if (parent) {
+      const nearBottom = parent.scrollHeight - parent.scrollTop - parent.clientHeight < 100;
+      if (nearBottom || messages.length <= 2) el.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
   useEffect(() => { saveMsgs(messages); }, [messages]);
 
   useEffect(() => {
