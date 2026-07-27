@@ -546,3 +546,35 @@ async def test_run_incluye_historial(tmp_workspace):
     # system primero, el mensaje nuevo al final
     assert msgs[0]["role"] == "system"
     assert msgs[-1]["content"] == "como me llamo?"
+
+
+# ─────────────────────────────── Prioridad 1: auto-memoria ────────────────────
+
+@pytest.mark.asyncio
+async def test_run_auto_inyecta_memoria(tmp_workspace, monkeypatch):
+    """Prioridad 1: run() auto-inyecta la memoria relevante en el system prompt
+    (además de la tool recall_memory), sin que el LLM tenga que pedirla."""
+    from inti.agent_loop import AgentLoop
+    import inti.memory as memory_mod
+
+    async def fake_ctx(project_id, profile, limit=5):
+        return "## Contexto de memoria\n- skill: usar Geist en DopaWeb (exito 95%)"
+
+    monkeypatch.setattr(memory_mod.MemoryContext, "get_context_for_job", fake_ctx)
+
+    captured = {"messages": None}
+
+    async def mock_chat(model, messages, tools=None, **kwargs):
+        captured["messages"] = messages
+        return {"model": model, "content": "ok", "finish_reason": "stop", "tool_calls": None}
+
+    with patch.object(or_client.openrouter, "chat", side_effect=mock_chat):
+        async def emit(ev):
+            pass
+        loop = AgentLoop(workspace=tmp_workspace, profile="dopaweb_theme")
+        await loop.run("hola", emit=emit)
+
+    system_msg = captured["messages"][0]
+    assert system_msg["role"] == "system"
+    # la memoria quedó inyectada en el system prompt
+    assert "usar Geist en DopaWeb" in system_msg["content"]

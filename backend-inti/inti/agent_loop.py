@@ -344,8 +344,22 @@ class AgentLoop:
         history: list[dict] | None = None,
     ) -> None:
         """Ejecuta el loop observar→pensar→actuar hasta completar la tarea."""
+        # Auto-inyección de memoria RELEVANTE en el system prompt (Prioridad 1).
+        # La tool recall_memory sigue disponible para búsquedas profundas, pero el
+        # LLM casi nunca la pide solo; el contexto relevante va SIEMPRE presente.
+        system_content = SYSTEM_PROMPT
+        try:
+            from inti.memory import MemoryContext
+            mem = await MemoryContext.get_context_for_job(
+                self.project_id, self.profile or "general", limit=5
+            )
+            if mem and "- " in mem and "[DUMMY]" not in mem:
+                system_content = SYSTEM_PROMPT + "\n\n" + mem
+        except Exception:
+            pass
+
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_content},
             *(history or []),
             {"role": "user", "content": user_message},
         ]
