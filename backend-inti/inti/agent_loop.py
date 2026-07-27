@@ -280,8 +280,11 @@ class AgentLoop:
         if not gemini_interactions.is_configured:
             return "Error: Gemini API key no configurada. Agregala en Modelos > Google AI."
 
-        prompt = args.get("prompt", "")
+        prompt = args.get("prompt", "")[:500]
         filename = args.get("filename", "generated.png")
+
+        if len(args.get("prompt", "")) > 500:
+            prompt += " (truncado a 500 chars)"
 
         await emit({"event_type": "step.start", "data": {"tool": "generate_image", "args": {"prompt": prompt[:100]}}}) if emit else None
 
