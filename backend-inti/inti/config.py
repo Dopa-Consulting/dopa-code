@@ -29,7 +29,10 @@ class Settings(BaseSettings):
 
     access_token: str = "cambiar-en-produccion"
 
-    model_config = {"env_prefix": "DOPA_", "env_file": ".env"}
+    # extra="ignore": el .env tiene claves con nombres que no matchean campos
+    # (p.ej. DOPA_CODE_DUMMY vs el campo dopa_code_dummy). Sin esto,
+    # pydantic-settings (extra='forbid' por default) crashea el boot del backend.
+    model_config = {"env_prefix": "DOPA_", "env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()
