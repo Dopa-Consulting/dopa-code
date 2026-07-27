@@ -8,6 +8,7 @@ interface Session {
   model: string;
   status: string;
   current_job_id: string | null;
+  workspace_path: string;
   created_at: string;
 }
 
