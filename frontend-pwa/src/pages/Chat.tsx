@@ -273,7 +273,7 @@ export default function Chat() {
   return (
     <div className="flex flex-col h-[calc(100dvh-120px)]">
       <div className="flex items-center justify-between mb-3">
-        <button onClick={() => { setMessages([WELCOME]); setClickedJobs(new Set()); localStorage.removeItem("dopa-chat"); }}
+        <button onClick={() => { setMessages([WELCOME]); setClickedJobs(new Set()); localStorage.removeItem("dopa-chat"); send({ type: "chat", content: "", new_session: true }); }}
           className="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
           title="Nuevo chat">
           + Nuevo
