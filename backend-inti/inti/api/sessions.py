@@ -24,6 +24,7 @@ async def list_sessions(
                 "status": s.status,
                 "workspace_path": s.workspace_path,
                 "current_job_id": s.current_job_id,
+                "metadata": s.metadata,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
                 "last_active_at": s.last_active_at.isoformat() if s.last_active_at else None,
             }

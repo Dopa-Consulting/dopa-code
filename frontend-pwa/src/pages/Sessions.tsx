@@ -10,6 +10,7 @@ interface Session {
   status: string;
   current_job_id: string | null;
   workspace_path: string;
+  metadata: Record<string, unknown>;
   created_at: string;
 }
 
@@ -79,12 +80,13 @@ export default function Sessions() {
             <div key={s.id}
               onClick={() => {
                 if (s.workspace_path) localStorage.setItem("dopa-workspace", s.workspace_path);
+                if (s.metadata?.title) localStorage.setItem("dopa-session-title", String(s.metadata.title));
                 navigate("/");
               }}
               className="rounded-lg bg-slate-900 border border-slate-800 p-3 cursor-pointer hover:bg-slate-800/50 transition-colors">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-200 truncate">
-                  {s.workspace_path?.split("\\").pop() || s.role} - {s.id.slice(0, 8)}
+                  {String(s.metadata?.title || s.workspace_path?.split("\\").pop() || s.role)}
                 </span>
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.status === "running" ? "bg-emerald-400 animate-pulse" : "bg-slate-600"}`} />
               </div>
