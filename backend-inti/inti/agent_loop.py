@@ -148,7 +148,7 @@ TOOL_SCHEMAS = [
 ]
 
 # Tools que streamean su propio progreso (NO deben ser envueltas por el loop)
-_STREAMING_TOOLS = {"run_opencode"}
+_STREAMING_TOOLS = {"run_opencode", "generate_image"}
 
 
 class AgentLoop:
@@ -274,57 +274,90 @@ class AgentLoop:
             return f"Error ejecutando {name}: {type(e).__name__}: {e}"
 
     async def _generate_image(self, args: dict, emit: Callable[[dict], Awaitable[None]] | None) -> str:
-        """Genera imagen con Nano Banana (Gemini) y la guarda en el workspace."""
-        from inti.gemini_interactions import gemini_interactions
+        """Genera una imagen con Gemini (Nano Banana) vía el endpoint generateContent
+        y la guarda en el workspace.
 
-        if not gemini_interactions.is_configured:
-            return "Error: Gemini API key no configurada. Agregala en Modelos > Google AI."
-
-        prompt = args.get("prompt", "")[:500]
-        filename = args.get("filename", "generated.png")
-
-        if len(args.get("prompt", "")) > 500:
-            prompt += " (truncado a 500 chars)"
-
-        await emit({"event_type": "step.start", "data": {"tool": "generate_image", "args": {"prompt": prompt[:100]}}}) if emit else None
-
-        result = await gemini_interactions.interact(
-            model="gemini-2.5-flash-image",
-            user_input=f"Generate ONLY an image: {prompt}. Do not respond with text, only generate the image.",
-        )
-
-        if "error" in result or not any(
-            block.get("type") == "image"
-            for step in result.get("steps", [])
-            for block in step.get("content", [])
-        ):
-            # Retry con Nano Banana 2 Lite
-            result = await gemini_interactions.interact(
-                model="gemini-3.1-flash-lite-image",
-                user_input=f"Generate an image of: {prompt}",
-            )
-
-        # Extraer imagen base64 de la respuesta
+        NO usa la Interactions API (interact()): esa es un flujo de texto/agente y
+        NUNCA devuelve bloques de imagen — por eso la versión previa se colgaba y
+        nunca producía nada. Acá se llama al modelo de imagen directo con
+        responseModalities=IMAGE y se extrae el base64 de inlineData.
+        """
         import base64
-        image_data = ""
-        for step in result.get("steps", []):
-            if step.get("type") == "model_output":
-                for block in step.get("content", []):
-                    if block.get("type") == "image" and block.get("data"):
-                        image_data = block["data"]
-                        break
+        import httpx
 
-        if not image_data:
-            return f"El modelo no genero imagen. Respuesta: {result.get('output', '')[:500]}"
+        prompt = (args.get("prompt") or "").strip()
+        if not prompt:
+            return "Error: falta 'prompt' para generar la imagen."
 
-        filepath = self.workspace / filename
-        filepath.write_bytes(base64.b64decode(image_data))
+        filename = args.get("filename") or "generated.png"
+        if not filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+            filename += ".png"
+
+        key = settings.google_api_key
+        if not key or key.endswith("...") or not key.startswith(("AQ.", "AIza")):
+            return "Error: Google API key inválida o ausente. Configúrala en Modelos > Google AI."
+
+        if settings.dopa_code_dummy:
+            return f"[DUMMY] Habría generado una imagen para: {prompt[:80]}"
+
+        try:
+            path = self._resolve_path(filename)
+        except ValueError as e:
+            return f"Error: {e}"
 
         if emit:
-            await emit({"event_type": "step.delta", "data": {"text": f"Imagen guardada: {filename}"}})
+            await emit({"event_type": "step.start", "data": {"tool": "generate_image", "args": {"prompt": prompt[:100]}}})
+
+        model = "gemini-2.5-flash-image"
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                resp = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    params={"key": key},
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"responseModalities": ["IMAGE"]},
+                    },
+                )
+        except httpx.TimeoutException:
+            if emit:
+                await emit({"event_type": "step.stop", "data": {"index": 0}})
+            return "Error: la generación de imagen excedió el tiempo límite (90s)."
+        except Exception as e:
+            if emit:
+                await emit({"event_type": "step.stop", "data": {"index": 0}})
+            return f"Error llamando a Gemini image: {type(e).__name__}: {e}"
+
+        if resp.status_code != 200:
+            if emit:
+                await emit({"event_type": "step.stop", "data": {"index": 0}})
+            return f"Error de Gemini image ({resp.status_code}): {resp.text[:300]}"
+
+        # Extraer el base64 real de inlineData (soporta inlineData e inline_data).
+        b64 = ""
+        for c in resp.json().get("candidates", []):
+            for p in c.get("content", {}).get("parts", []):
+                inline = p.get("inlineData") or p.get("inline_data")
+                if inline and inline.get("data"):
+                    b64 = inline["data"]
+                    break
+            if b64:
+                break
+
+        if not b64:
+            if emit:
+                await emit({"event_type": "step.stop", "data": {"index": 0}})
+            return "El modelo no devolvió una imagen. Probá reformular el prompt."
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(base64.b64decode(b64))
+
+        if emit:
+            await emit({"event_type": "step.delta", "data": {"text": f"🖼️ Imagen guardada: {filename}"}})
             await emit({"event_type": "step.stop", "data": {"index": 0}})
 
-        return f"Imagen generada y guardada como {filename} ({filepath.stat().st_size} bytes) en {self.workspace}"
+        return f"Imagen generada y guardada en {filename} ({path.stat().st_size} bytes)."
 
     async def _run_opencode(
         self,
