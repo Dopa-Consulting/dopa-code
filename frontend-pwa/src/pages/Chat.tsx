@@ -47,7 +47,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (messages.length > 1) {
-      try { sessionStorage.setItem("dopa-chat", JSON.stringify(messages.slice(-50))); } catch {}
+      saveMsgs(messages);
     }
   }, [messages]);
 
