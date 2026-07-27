@@ -103,8 +103,15 @@ export default function Chat() {
   const [workspace, setWorkspace] = useState(() => localStorage.getItem("dopa-workspace") || "");
   const bottomRef = useRef<HTMLDivElement>(null);
   const toolRef = useRef<string | null>(null);
+  const msgCountRef = useRef(0);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    const isFirst = msgCountRef.current === 0;
+    const isNew = messages.length > msgCountRef.current;
+    msgCountRef.current = messages.length;
+    if (isFirst) bottomRef.current?.scrollIntoView({ block: "end" });
+    else if (isNew) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages]);
 
   useEffect(() => {
     if (messages.length > 1) {
