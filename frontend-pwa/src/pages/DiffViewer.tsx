@@ -84,10 +84,10 @@ export default function DiffViewer() {
       {jobInfo && Object.keys(jobInfo).length > 0 && (
         <div className="rounded-lg bg-slate-900 border border-slate-800 p-3 space-y-1">
           <div className="flex items-center gap-2">
-            <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[jobInfo.status as string] || "bg-slate-700"}`}>
-              {(jobInfo.status as string) || "unknown"}
+            <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[String(jobInfo.status)] || "bg-slate-700"}`}>
+              {String(jobInfo.status || "unknown")}
             </span>
-            <span className="text-sm font-medium text-slate-300">{jobInfo.title as string}</span>
+            <span className="text-sm font-medium text-slate-300">{String(jobInfo.title || "")}</span>
           </div>
           {jobInfo.profile && <p className="text-xs text-slate-500">Perfil: {String(jobInfo.profile)}</p>}
           {jobInfo.description && <p className="text-xs text-slate-600 mt-1">{String(jobInfo.description).slice(0, 200)}</p>}
