@@ -213,6 +213,7 @@ async def list_diffs(job_id: str, db: AsyncSession = Depends(get_db)):
                 "summary": d.summary,
                 "status": d.status,
                 "files_changed": d.files_changed,
+                "diff_text": d.diff_text,
                 "created_at": d.created_at.isoformat() if d.created_at else None,
             }
             for d in diffs
