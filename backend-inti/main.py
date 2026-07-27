@@ -119,7 +119,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
             from inti.agent_loop import AgentLoop
 
-            # Wrapper de emit para capturar la respuesta final y guardarla en el historial.
+            # Combinar historial del frontend (sobrevive reconexiones) con el del server
+            client_history = data.get("history", [])
+            merged_history = client_history if client_history else history
+
             final_reply: dict = {"content": ""}
 
             async def emit(ev):
@@ -132,12 +135,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 profile=data.get("profile"),
                 require_approval=data.get("require_approval", False),
             )
-            await loop.run(content, emit=emit, history=history)
+            await loop.run(content, emit=emit, history=merged_history)
 
             history.append({"role": "user", "content": content})
             if final_reply["content"]:
                 history.append({"role": "assistant", "content": final_reply["content"]})
-            # Cap ≈10 turnos para no crecer sin límite ni inflar el contexto del LLM.
             if len(history) > 20:
                 del history[: len(history) - 20]
 

@@ -149,7 +149,11 @@ export default function Chat() {
 
     setMessages((prev) => [...prev, msg]);
     setThinking(true);
-    send({ type: "chat", content: prompt, require_approval: requireApproval });
+    const chatHistory = messages.slice(-10).map(m => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.content
+    }));
+    send({ type: "chat", content: prompt, require_approval: requireApproval, history: chatHistory });
     setInput("");
   }, [input, send, subscribe]);
 

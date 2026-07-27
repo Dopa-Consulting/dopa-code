@@ -1,0 +1,108 @@
+<svg width="1280" height="440" viewBox="0 0 1280 440" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Dopa Code - Desarrollo agentico Local-First">
+  <defs>
+    <!-- Gradiente andino: sol inti -> dorado -> naranja -->
+    <linearGradient id="sunGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd166"/>
+      <stop offset="45%" stop-color="#f5a623"/>
+      <stop offset="100%" stop-color="#ff8f3f"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffd166"/>
+      <stop offset="55%" stop-color="#f5a623"/>
+      <stop offset="100%" stop-color="#ff8f3f"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#f5a623" stop-opacity="0.22"/>
+      <stop offset="60%" stop-color="#f5a623" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+
+  <!-- Fondo -->
+  <rect width="1280" height="440" fill="#0f1115"/>
+  <rect width="1280" height="440" fill="url(#glow)"/>
+
+  <!-- Rejilla sutil de puntos -->
+  <g fill="#ffffff" opacity="0.04">
+    <circle cx="120" cy="80" r="2"/><circle cx="200" cy="140" r="2"/><circle cx="90" cy="220" r="2"/>
+    <circle cx="1160" cy="90" r="2"/><circle cx="1090" cy="160" r="2"/><circle cx="1200" cy="260" r="2"/>
+    <circle cx="1150" cy="360" r="2"/><circle cx="150" cy="360" r="2"/>
+  </g>
+
+  <!-- ===== Sol Inti (izquierda) ===== -->
+  <g transform="translate(250 220)">
+    <circle r="150" fill="url(#sunGrad)" opacity="0.18" filter="url(#soft)"/>
+    <!-- Rayos -->
+    <g stroke="url(#sunGrad)" stroke-width="7" stroke-linecap="round">
+      <line x1="0" y1="-118" x2="0" y2="-150"/>
+      <line x1="0" y1="118" x2="0" y2="150"/>
+      <line x1="-118" y1="0" x2="-150" y2="0"/>
+      <line x1="118" y1="0" x2="150" y2="0"/>
+      <line x1="-83" y1="-83" x2="-106" y2="-106"/>
+      <line x1="83" y1="-83" x2="106" y2="-106"/>
+      <line x1="-83" y1="83" x2="-106" y2="106"/>
+      <line x1="83" y1="83" x2="106" y2="106"/>
+    </g>
+    <g stroke="url(#sunGrad)" stroke-width="4" stroke-linecap="round" opacity="0.8">
+      <line x1="-45" y1="-110" x2="-56" y2="-138"/>
+      <line x1="45" y1="-110" x2="56" y2="-138"/>
+      <line x1="-45" y1="110" x2="-56" y2="138"/>
+      <line x1="45" y1="110" x2="56" y2="138"/>
+      <line x1="-110" y1="-45" x2="-138" y2="-56"/>
+      <line x1="110" y1="-45" x2="138" y2="-56"/>
+      <line x1="-110" y1="45" x2="-138" y2="56"/>
+      <line x1="110" y1="45" x2="138" y2="56"/>
+    </g>
+    <!-- Disco solar -->
+    <circle r="92" fill="url(#sunGrad)"/>
+    <circle r="92" fill="none" stroke="#0f1115" stroke-width="3" opacity="0.35"/>
+    <!-- Cara Inti minimal -->
+    <g fill="#1a1206" opacity="0.85">
+      <circle cx="-30" cy="-14" r="7"/>
+      <circle cx="30" cy="-14" r="7"/>
+      <path d="M -34 26 Q 0 52 34 26" fill="none" stroke="#1a1206" stroke-width="6" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- ===== Texto (derecha) ===== -->
+  <g transform="translate(500 0)">
+    <!-- Eyebrow badge -->
+    <g transform="translate(0 118)">
+      <rect x="0" y="0" width="330" height="34" rx="17" fill="#1c2029" stroke="#ffffff" stroke-opacity="0.10"/>
+      <text x="18" y="23" font-family="Segoe UI, Roboto, system-ui, sans-serif" font-size="15" font-weight="600" fill="#f5a623">☀ El agente andino Inti</text>
+    </g>
+
+    <!-- Titulo -->
+    <text x="0" y="215" font-family="Segoe UI, Roboto, system-ui, sans-serif" font-size="66" font-weight="800" letter-spacing="-2">
+      <tspan fill="#eef0f4">Dopa</tspan><tspan fill="url(#textGrad)">Code</tspan>
+    </text>
+
+    <!-- Subtitulo -->
+    <text x="2" y="262" font-family="Segoe UI, Roboto, system-ui, sans-serif" font-size="24" font-weight="600" fill="#a7adba">
+      Desarrollo agéntico <tspan fill="#ffd166">Local-First</tspan>
+    </text>
+
+    <!-- Tagline -->
+    <text x="2" y="308" font-family="Segoe UI, Roboto, system-ui, sans-serif" font-size="18" fill="#a7adba">
+      Un agente que ejecuta, no que solo sugiere.
+    </text>
+
+    <!-- Chips de features -->
+    <g font-family="Segoe UI, Roboto, system-ui, sans-serif" font-size="14" font-weight="600">
+      <g transform="translate(0 340)">
+        <rect width="120" height="30" rx="15" fill="rgba(245,166,35,0.12)"/>
+        <text x="16" y="20" fill="#ffd166">🔒 Privado</text>
+      </g>
+      <g transform="translate(132 340)">
+        <rect width="150" height="30" rx="15" fill="rgba(245,166,35,0.12)"/>
+        <text x="16" y="20" fill="#ffd166">🛠️ Multi-tool</text>
+      </g>
+      <g transform="translate(294 340)">
+        <rect width="140" height="30" rx="15" fill="rgba(245,166,35,0.12)"/>
+        <text x="16" y="20" fill="#ffd166">🤖 Agéntico</text>
+      </g>
+    </g>
+  </g>
+</svg>

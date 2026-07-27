@@ -126,6 +126,25 @@ TOOL_SCHEMAS = [
             "parameters": {"type": "object", "properties": {}}
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_image",
+            "description": (
+                "Genera una imagen usando IA (Nano Banana de Gemini). "
+                "Guarda el PNG en el workspace. Ideal para landing pages, banners, "
+                "portadas de README, o cualquier recurso visual."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Descripcion de la imagen a generar"},
+                    "filename": {"type": "string", "description": "Nombre del archivo PNG (ej: portada.png)"},
+                },
+                "required": ["prompt", "filename"]
+            }
+        }
+    },
 ]
 
 # Tools que streamean su propio progreso (NO deben ser envueltas por el loop)
@@ -243,6 +262,9 @@ class AgentLoop:
                 return await MemoryContext.get_context_for_job(
                     self.project_id, self.profile or "general", limit=5)
 
+            elif name == "generate_image":
+                return await self._generate_image(args, emit)
+
             else:
                 return f"Error: herramienta desconocida: {name}"
 
@@ -250,6 +272,48 @@ class AgentLoop:
             return f"Error: {e}"
         except Exception as e:
             return f"Error ejecutando {name}: {type(e).__name__}: {e}"
+
+    async def _generate_image(self, args: dict, emit: Callable[[dict], Awaitable[None]] | None) -> str:
+        """Genera imagen con Nano Banana (Gemini) y la guarda en el workspace."""
+        from inti.gemini_interactions import gemini_interactions
+
+        if not gemini_interactions.is_configured:
+            return "Error: Gemini API key no configurada. Agregala en Modelos > Google AI."
+
+        prompt = args.get("prompt", "")
+        filename = args.get("filename", "generated.png")
+
+        await emit({"event_type": "step.start", "data": {"tool": "generate_image", "args": {"prompt": prompt[:100]}}}) if emit else None
+
+        result = await gemini_interactions.interact(
+            model="gemini-2.5-flash-image",
+            user_input=prompt,
+        )
+
+        if "error" in result:
+            return f"Error generando imagen: {result['error']}"
+
+        # Extraer imagen base64 de la respuesta
+        import base64
+        image_data = ""
+        for step in result.get("steps", []):
+            if step.get("type") == "model_output":
+                for block in step.get("content", []):
+                    if block.get("type") == "image" and block.get("data"):
+                        image_data = block["data"]
+                        break
+
+        if not image_data:
+            return f"El modelo no genero imagen. Respuesta: {result.get('output', '')[:500]}"
+
+        filepath = self.workspace / filename
+        filepath.write_bytes(base64.b64decode(image_data))
+
+        if emit:
+            await emit({"event_type": "step.delta", "data": {"text": f"Imagen guardada: {filename}"}})
+            await emit({"event_type": "step.stop", "data": {"index": 0}})
+
+        return f"Imagen generada y guardada como {filename} ({filepath.stat().st_size} bytes) en {self.workspace}"
 
     async def _run_opencode(
         self,
