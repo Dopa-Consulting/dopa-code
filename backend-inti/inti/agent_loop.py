@@ -230,9 +230,6 @@ class AgentLoop:
         BRIDGE_URL = "http://localhost:4097"
         BRIDGE_TOKEN = "dopa-bridge-local-dev"
 
-        if settings.dopa_code_dummy:
-            return "[DUMMY] OpenCode habría ejecutado: " + task[:200]
-
         collected: list[str] = []
         await emit({
             "event_type": "step.start",
@@ -240,6 +237,10 @@ class AgentLoop:
         })
 
         try:
+            # dummy dentro del try para que el finally emita step.stop (framing
+            # consistente en el Chat también en modo dummy).
+            if settings.dopa_code_dummy:
+                return "[DUMMY] OpenCode habría ejecutado: " + task[:200]
             async with httpx.AsyncClient(timeout=180.0) as client:
                 async with client.stream(
                     "POST",
