@@ -8,7 +8,7 @@ Formato correcto segun la documentacion oficial:
   - background=true para tareas largas
   - agent en vez de model para agentes (Antigravity, Deep Research)
 
-API keys nuevas: formato AQ.A...
+API keys nuevas: formato AQ.A... (antes AIza...).
 """
 
 import json
@@ -23,6 +23,19 @@ from inti.config import settings
 logger = logging.getLogger("inti.gemini_interactions")
 
 INTERACTIONS_API = "https://generativelanguage.googleapis.com/v1beta"
+
+# Prefijos validos de Google API key.
+#   AQ.  -> formato nuevo (GA 2026)
+#   AIza -> formato clasico (Google AI Studio)
+GOOGLE_KEY_PREFIXES = ("AQ.", "AIza")
+
+
+def is_valid_google_key(key: str) -> bool:
+    """True si la key no esta vacia, no es un placeholder y tiene prefijo valido."""
+    if not key or key.endswith("..."):
+        return False
+    return key.startswith(GOOGLE_KEY_PREFIXES)
+
 
 INTERACTIONS_MODELS = {
     "gemini-3.6-flash": {
@@ -71,7 +84,7 @@ class GeminiInteractions:
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.api_key) and not self.api_key.endswith("...")
+        return is_valid_google_key(self.api_key)
 
     # ------------------------------------------------------------------
     # Core: interact (sincrono)
