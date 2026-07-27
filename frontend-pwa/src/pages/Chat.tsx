@@ -29,7 +29,10 @@ const WELCOME: Message = {
 };
 
 function loadMsgs(): Message[] {
-  try { const s = sessionStorage.getItem("dopa-chat"); return s ? JSON.parse(s) : [WELCOME]; } catch { return [WELCOME]; }
+  try { const s = localStorage.getItem("dopa-chat"); return s ? JSON.parse(s) : [WELCOME]; } catch { return [WELCOME]; }
+}
+function saveMsgs(msgs: Message[]) {
+  try { localStorage.setItem("dopa-chat", JSON.stringify(msgs.slice(-50))); } catch {}
 }
 
 export default function Chat() {
