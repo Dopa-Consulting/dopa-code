@@ -83,7 +83,11 @@ const TOOL_META: Record<string, { icon: string; verb: string }> = {
 
 const WELCOME: Message = {
   id: "welcome", role: "intl",
-  content: "**Dopa Code** - Inti\nWorkspace: `" + (localStorage.getItem("dopa-workspace") || "default") + "`\n\nEscribe `Hola` o una tarea como `Crea landing page` para empezar.",
+  content: (() => {
+    const ws = localStorage.getItem("dopa-workspace") || "default";
+    const st = localStorage.getItem("dopa-session-title");
+    return st ? `**${st}**\nWorkspace: \`${ws}\`` : `**Dopa Code** - Inti\nWorkspace: \`${ws}\`\n\nEscribe \`Hola\` o una tarea como \`Crea landing page\` para empezar.`;
+  })(),
   timestamp: new Date().toISOString(),
 };
 
