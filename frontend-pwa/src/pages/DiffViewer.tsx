@@ -89,8 +89,8 @@ export default function DiffViewer() {
             </span>
             <span className="text-sm font-medium text-slate-300">{String(jobInfo.title || "")}</span>
           </div>
-          {jobInfo.profile && <p className="text-xs text-slate-500">Perfil: {String(jobInfo.profile)}</p>}
-          {jobInfo.description && <p className="text-xs text-slate-600 mt-1">{String(jobInfo.description).slice(0, 200)}</p>}
+          {(jobInfo.profile as string) && <p className="text-xs text-slate-500">Perfil: {String(jobInfo.profile)}</p>}
+          {(jobInfo.description as string) && <p className="text-xs text-slate-600 mt-1">{String(jobInfo.description).slice(0, 200)}</p>}
         </div>
       )}
 
