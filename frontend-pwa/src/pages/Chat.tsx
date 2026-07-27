@@ -83,7 +83,7 @@ const TOOL_META: Record<string, { icon: string; verb: string }> = {
 
 const WELCOME: Message = {
   id: "welcome", role: "intl",
-  content: "**Dopa Code** - Inti\nWorkspace: `D:\\Dopa\\01_Desarrollo\\dopa-code\\backend-inti`\n\n`crea landing page` `lee archivo` `lista archivos` `git status` `/stream X`",
+  content: "**Dopa Code** - Inti\nWorkspace: `" + (localStorage.getItem("dopa-workspace") || "default") + "`\n\nEscribe `Hola` o una tarea como `Crea landing page` para empezar.",
   timestamp: new Date().toISOString(),
 };
 

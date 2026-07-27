@@ -75,17 +75,17 @@ export default function Sessions() {
           sessions.map((s) => (
             <div key={s.id} className="rounded-lg bg-slate-900 border border-slate-800 p-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-amber-400">{s.id.slice(0, 12)}</span>
-                <span className={`w-2 h-2 rounded-full ${s.status === "running" ? "bg-emerald-400 animate-pulse" : "bg-slate-600"}`} />
+                <span className="text-sm font-medium text-slate-200 truncate">
+                  {s.workspace_path?.split("\\").pop() || s.role} - {s.id.slice(0, 8)}
+                </span>
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.status === "running" ? "bg-emerald-400 animate-pulse" : "bg-slate-600"}`} />
               </div>
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-slate-300">{s.role}</span>
+                <span className="text-xs text-amber-400">{s.role}</span>
                 <span className="text-xs text-slate-500">{s.model?.split("/").pop()}</span>
                 <span className="text-xs text-slate-600 ml-auto">{s.status}</span>
               </div>
-              {s.current_job_id && (
-                <p className="text-xs text-slate-600 mt-1">Job: {s.current_job_id.slice(0, 8)}</p>
-              )}
+              <p className="text-xs text-slate-600 mt-1 truncate">{s.workspace_path}</p>
             </div>
           ))
         )}
