@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const API_BASE = `${location.protocol}//${location.host}/api/v1`;
 
@@ -13,6 +14,7 @@ interface Session {
 }
 
 export default function Sessions() {
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [workspace, setWorkspace] = useState(localStorage.getItem("dopa-workspace") || "D:\\Dopa\\01_Desarrollo\\dopa-code");
   const [role, setRole] = useState("builder");
@@ -74,7 +76,12 @@ export default function Sessions() {
           <p className="text-xs text-slate-600">No hay sesiones. Crea una para empezar.</p>
         ) : (
           sessions.map((s) => (
-            <div key={s.id} className="rounded-lg bg-slate-900 border border-slate-800 p-3">
+            <div key={s.id}
+              onClick={() => {
+                if (s.workspace_path) localStorage.setItem("dopa-workspace", s.workspace_path);
+                navigate("/");
+              }}
+              className="rounded-lg bg-slate-900 border border-slate-800 p-3 cursor-pointer hover:bg-slate-800/50 transition-colors">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-200 truncate">
                   {s.workspace_path?.split("\\").pop() || s.role} - {s.id.slice(0, 8)}

@@ -10,7 +10,7 @@ export default function Cambios() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const workspace = localStorage.getItem("dopa-workspace") || "";
+  const workspace = localStorage.getItem("dopa-workspace") || "D:\\Dopa\\01_Desarrollo\\dopa-code\\backend-inti";
 
   const fetchChanges = async () => {
     if (!workspace) return;
