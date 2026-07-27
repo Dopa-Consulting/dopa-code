@@ -289,3 +289,119 @@ async def test_run_opencode_dummy_mode(tmp_workspace, monkeypatch):
 
     step_stops = [e for e in collector if e["event_type"] == "step.stop"]
     assert len(step_stops) == 1
+
+
+# ────────────────────────────────────────── Slice 3 ──────────────────────────
+
+@pytest.mark.asyncio
+async def test_gate_blocks_protected_file(tmp_workspace, monkeypatch):
+    """Slice 3 · Caso A: gate de guardrails bloquea write_file sobre archivo protegido.
+    El archivo NO se escribe. Verificación: step.delta contiene BLOQUEADO + archivo no existe."""
+    from inti.agent_loop import AgentLoop
+    from inti import guardrails as gr
+
+    async def mock_validate(project_type, diff_text, files_changed):
+        return {
+            "passed": False,
+            "violations": [
+                {"rule_id": "r1", "file": "core.css", "severity": "block", "message": "archivo protegido"}
+            ],
+        }
+
+    monkeypatch.setattr(gr.guardrail_engine, "validate_diff", mock_validate)
+
+    calls = 0
+    async def mock_chat(model, messages, tools=None, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return {
+                "model": model, "content": None, "finish_reason": "tool_calls",
+                "tool_calls": [{
+                    "id": "c1", "type": "function",
+                    "function": {"name": "write_file", "arguments": '{"path":"core.css","content":"body{color:red}"}'},
+                }],
+            }
+        else:
+            return {"model": model, "content": "No pude escribir", "finish_reason": "stop", "tool_calls": None}
+
+    with patch.object(or_client.openrouter, "chat", side_effect=mock_chat):
+        collector = []
+        async def emit(event): collector.append(event)
+        loop = AgentLoop(workspace=tmp_workspace, profile="dopaweb_theme")
+        await loop.run("escribe core.css", emit=emit)
+
+    # Verificar que fue bloqueado
+    step_deltas = [e for e in collector if e["event_type"] == "step.delta"]
+    assert len(step_deltas) == 1
+    assert "BLOQUEADO" in step_deltas[0]["data"]["text"]
+
+    # El archivo NO debe existir
+    css = Path(tmp_workspace) / "core.css"
+    assert not css.exists(), "El archivo protegido NO debe existir"
+
+
+@pytest.mark.asyncio
+async def test_no_profile_no_gate(tmp_workspace):
+    """Slice 3 · Caso A2: sin profile, el gate duerme y write_file escribe normal."""
+    from inti.agent_loop import AgentLoop
+
+    calls = 0
+    async def mock_chat(model, messages, tools=None, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return {
+                "model": model, "content": None, "finish_reason": "tool_calls",
+                "tool_calls": [{
+                    "id": "c2", "type": "function",
+                    "function": {"name": "write_file", "arguments": '{"path":"readme.md","content":"# Hola"}'},
+                }],
+            }
+        else:
+            return {"model": model, "content": "Listo", "finish_reason": "stop", "tool_calls": None}
+
+    with patch.object(or_client.openrouter, "chat", side_effect=mock_chat):
+        collector = []
+        async def emit(event): collector.append(event)
+        loop = AgentLoop(workspace=tmp_workspace)  # sin profile
+        await loop.run("escribe readme", emit=emit)
+
+    readme = Path(tmp_workspace) / "readme.md"
+    assert readme.exists()
+    assert readme.read_text() == "# Hola"
+
+
+@pytest.mark.asyncio
+async def test_recall_memory_dummy(tmp_workspace, monkeypatch):
+    """Slice 3 · Caso B: recall_memory tool devuelve contexto en modo dummy."""
+    from inti.agent_loop import AgentLoop
+    from inti.config import settings
+
+    monkeypatch.setattr(settings, "dopa_code_dummy", True)
+
+    calls = 0
+    async def mock_chat(model, messages, tools=None, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return {
+                "model": model, "content": None, "finish_reason": "tool_calls",
+                "tool_calls": [{
+                    "id": "c3", "type": "function",
+                    "function": {"name": "recall_memory", "arguments": "{}"},
+                }],
+            }
+        else:
+            return {"model": model, "content": "Tengo la memoria", "finish_reason": "stop", "tool_calls": None}
+
+    with patch.object(or_client.openrouter, "chat", side_effect=mock_chat):
+        collector = []
+        async def emit(event): collector.append(event)
+        loop = AgentLoop(workspace=tmp_workspace, project_id="p1", profile="dopaweb_theme")
+        await loop.run("recuerda", emit=emit)
+
+    step_deltas = [e for e in collector if e["event_type"] == "step.delta"]
+    assert len(step_deltas) == 1
+    # MemoryContext en dummy mode devuelve "[DUMMY]..." o markdown con skills
+    content = step_deltas[0]["data"]["text"]
