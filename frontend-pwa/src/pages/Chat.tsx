@@ -88,11 +88,17 @@ export default function Chat() {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "system", content: `Job #${jobId.slice(0,8)} rechazado.`, timestamp: new Date().toISOString(), jobId }]);
     }
   };
-
   const handleSend = useCallback(async () => {
     if (!input.trim()) return;
     const isStream = input.startsWith("/stream ");
     const prompt = isStream ? input.slice(8) : input;
+
+    // Task commands need approval checkpoint
+    const taskVerbs = ["crea", "hace", "haz", "genera", "construye", "diseña", "implementa",
+                       "desarrolla", "codifica", "modifica", "refactoriza", "corrige", "arregla"];
+    const first = prompt.split(" ")[0].toLowerCase();
+    const requireApproval = taskVerbs.includes(first);
+
     const msg: Message = { id: crypto.randomUUID(), role: "user", content: input, timestamp: new Date().toISOString() };
 
     if (isStream) {
@@ -113,7 +119,7 @@ export default function Chat() {
     }
 
     setMessages((prev) => [...prev, msg]);
-    send({ type: "chat", content: prompt });
+    send({ type: "chat", content: prompt, require_approval: requireApproval });
     setInput("");
   }, [input, send, subscribe]);
 
