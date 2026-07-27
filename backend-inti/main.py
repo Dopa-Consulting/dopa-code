@@ -107,6 +107,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # nueva; AgentLoop.run acepta `history` pero main.py nunca lo pasaba, así que
     # Inti no recordaba nada dentro de una misma conversación).
     history: list[dict] = []
+    session_id: str = ""
     try:
         while True:
             data = await websocket.receive_json()
@@ -118,18 +119,26 @@ async def websocket_endpoint(websocket: WebSocket):
             ws_in = data.get("workspace", "")
             workspace = ws_in if ws_in and Path(ws_in).is_dir() else str(Path.cwd())
 
-            # Auto-crear sesion en el primer mensaje
-            session_id = data.get("session_id", "")
+            # Resetear sesion si el frontend pide nuevo chat
+            if data.get("new_session"):
+                session_id = ""
+                history = []
+                await websocket.send_json({
+                    "event_type": "session_reset",
+                    "payload": {"message": "Nueva sesion iniciada"}
+                })
+                continue
+
+            # Auto-crear sesion por conexion (no global)
             if not session_id:
                 from inti.orchestrator import orchestrator
-                if orchestrator.total_sessions == 0:
-                    role = "builder" if content and content.lower().split()[0] in ["crea","genera","construye","hace","diseña"] else "architect"
-                    s = orchestrator.create_session(role=role, workspace_path=workspace)
-                    session_id = s.id
-                    await websocket.send_json({
-                        "event_type": "session_created",
-                        "payload": {"session_id": session_id, "workspace": workspace}
-                    })
+                role = "builder" if content and content.lower().split()[0] in ["crea","genera","construye","hace","diseña"] else "architect"
+                s = orchestrator.create_session(role=role, workspace_path=workspace)
+                session_id = s.id
+                await websocket.send_json({
+                    "event_type": "session_created",
+                    "payload": {"session_id": session_id, "workspace": workspace}
+                })
 
             from inti.agent_loop import AgentLoop
 
