@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Dopa Code — Entorno de desarrollo agéntico Local-First con el agente andino Inti." />
+  <title>Dopa Code — Desarrollo agéntico Local-First</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ===== Navbar ===== -->
+  <header class="navbar" id="inicio">
+    <div class="container nav-inner">
+      <a href="#inicio" class="logo">
+        <span class="logo-mark">☀</span>
+        <span class="logo-text">Dopa<strong>Code</strong></span>
+      </a>
+      <nav>
+        <ul class="nav-links" id="navLinks">
+          <li><a href="#inicio">Inicio</a></li>
+          <li><a href="#caracteristicas">Características</a></li>
+          <li><a href="#como-funciona">Cómo funciona</a></li>
+          <li><a href="#contacto">Contacto</a></li>
+        </ul>
+      </nav>
+      <button class="nav-toggle" id="navToggle" aria-label="Abrir menú">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== Hero ===== -->
+  <section class="hero">
+    <div class="container hero-inner reveal">
+      <p class="eyebrow">☀ El agente andino Inti a tu servicio</p>
+      <h1>Desarrolla con un agente que <span class="grad">ejecuta</span>, no que solo sugiere.</h1>
+      <p class="subtitle">
+        <strong>Dopa Code</strong> es un entorno de desarrollo agéntico
+        <em>Local-First</em>: tu código y tus datos nunca salen de tu máquina.
+      </p>
+      <div class="cta-group">
+        <a href="#contacto" class="btn btn-primary">Empezar</a>
+        <a href="https://github.com" target="_blank" rel="noopener" class="btn btn-ghost">Ver en GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Características ===== -->
+  <section class="section" id="caracteristicas">
+    <div class="container">
+      <h2 class="section-title reveal">Características</h2>
+      <p class="section-sub reveal">Todo lo que necesitas para trabajar rápido y con privacidad.</p>
+      <div class="grid">
+        <article class="card reveal">
+          <div class="card-icon">🔒</div>
+          <h3>Local-First</h3>
+          <p>Tu privacidad primero. El código y los datos permanecen en tu máquina, sin depender de la nube.</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-icon">☀</div>
+          <h3>Agente Inti</h3>
+          <p>El agente andino que no solo responde: ejecuta herramientas reales para cumplir tus tareas.</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-icon">🛠️</div>
+          <h3>Multi-herramienta</h3>
+          <p>Edición de archivos, terminal integrada y control de git, todo desde una misma interfaz.</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-icon">🤖</div>
+          <h3>Delegación inteligente</h3>
+          <p>Las tareas grandes multi-archivo se delegan a OpenCode, un agente especializado en construir features.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Cómo funciona ===== -->
+  <section class="section section-alt" id="como-funciona">
+    <div class="container">
+      <h2 class="section-title reveal">Cómo funciona</h2>
+      <p class="section-sub reveal">De la idea al código en cuatro pasos.</p>
+      <div class="steps">
+        <div class="step reveal">
+          <span class="step-num">1</span>
+          <h3>Describe tu tarea</h3>
+          <p>Cuéntale a Inti qué necesitas en lenguaje natural, sin comandos crípticos.</p>
+        </div>
+        <div class="step reveal">
+          <span class="step-num">2</span>
+          <h3>Inti planifica</h3>
+          <p>El agente inspecciona tu proyecto y decide qué herramientas usar en cada paso.</p>
+        </div>
+        <div class="step reveal">
+          <span class="step-num">3</span>
+          <h3>Ejecuta local</h3>
+          <p>Lee, escribe archivos y corre comandos en tu máquina — todo Local-First.</p>
+        </div>
+        <div class="step reveal">
+          <span class="step-num">4</span>
+          <h3>Verifica y entrega</h3>
+          <p>Revisa los cambios con git y confirma el resultado antes de dártelo listo.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Contacto / CTA final ===== -->
+  <section class="section cta-final" id="contacto">
+    <div class="container reveal">
+      <h2>¿Listo para codear con Inti?</h2>
+      <p>Empieza hoy y lleva tu flujo de desarrollo al siguiente nivel, sin comprometer tu privacidad.</p>
+      <div class="cta-group center">
+        <a href="#inicio" class="btn btn-primary">Empezar ahora</a>
+        <a href="mailto:hola@dopacode.dev" class="btn btn-ghost">Contáctanos</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Footer ===== -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span class="logo-text">Dopa<strong>Code</strong></span>
+      <p>&copy; <span id="year"></span> Dopa Code. Hecho con ☀ por Inti, el agente andino.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
