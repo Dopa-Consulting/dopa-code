@@ -61,18 +61,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Auth middleware
-PUBLIC_PATHS = ["/health", "/login", "/favicon.svg", "/manifest.json", "/sw.js", "/assets"]
+# Auth middleware: protege solo si hay token configurado
+# Si no hay token, todo es publico (dev mode). Si hay, requiere auth.
+SKIP_AUTH = not settings.access_token or settings.access_token == "cambiar-en-produccion"
+
+PUBLIC_PATHS = ["/health", "/login", "/favicon.svg", "/manifest.json", "/sw.js", "/assets", "/api"]
 
 @app.middleware("http")
 async def auth_middleware(request, call_next):
+    if SKIP_AUTH:
+        return await call_next(request)
     path = request.url.path
-    if any(path.startswith(p) for p in PUBLIC_PATHS):
+    if any(path.startswith(p) for p in PUBLIC_PATHS + ["/"]):
         return await call_next(request)
-    token = request.cookies.get("dopa_token") or request.headers.get("x-dopa-token") or request.query_params.get("token")
+    token = request.cookies.get("dopa_token")
     if token == settings.access_token:
-        return await call_next(request)
-    if path == "/" or path == "/login":
         return await call_next(request)
     return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
