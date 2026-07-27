@@ -108,73 +108,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             content = data.get("content", "")
-            use_stream = data.get("stream", False)
             workspace = str(Path.cwd())
 
-            # 1. Ejecutar comando real
-            from inti.chat_commands import execute_chat_command
-            cmd_result = await execute_chat_command(workspace, content)
+            from inti.agent_loop import AgentLoop
 
-            if cmd_result["type"] == "action":
-                await websocket.send_json({
-                    "event_type": "chat_response",
-                    "payload": {
-                        "content": cmd_result["content"],
-                        "model": "inti-action",
-                        "job_id": cmd_result.get("job_id", ""),
-                    }
-                })
-
-                # Si creo un job → stream OpenCode via bridge
-                is_job = "job" in cmd_result.get("content", "").lower()
-                if is_job:
-                    await websocket.send_json({"event_type": "step.start", "data": {"type": "opencode"}})
-                    try:
-                        import httpx as _httpx
-                        async with _httpx.AsyncClient(timeout=120.0) as client:
-                            async with client.stream(
-                                "POST", "http://localhost:4097/run-stream",
-                                headers={"x-bridge-token": "dopa-bridge-local-dev"},
-                                json={"prompt": content, "directory": workspace, "agent": "build"},
-                            ) as resp:
-                                async for line in resp.aiter_lines():
-                                    if line.startswith("data: "):
-                                        try:
-                                            chunk = json.loads(line[6:])
-                                            await websocket.send_json({"event_type": "step.delta", "data": chunk})
-                                        except Exception:
-                                            pass
-                    except Exception:
-                        pass
-                    # Git diff
-                    try:
-                        r = subprocess.run(["git", "diff", "--stat"], cwd=workspace, capture_output=True, text=True, timeout=10)
-                        if r.stdout.strip():
-                            await websocket.send_json({"event_type": "chat_response", "payload": {"content": "**Git diff**:\n```\n" + r.stdout.strip()[:2000] + "\n```", "model": "git"}})
-                    except Exception:
-                        pass
-                    await websocket.send_json({"event_type": "step.stop", "data": {"index": 0}})
-
-            else:
-                # 2. Conversacion → LLM
-                from inti.gemini_interactions import gemini_interactions
-                from inti.openrouter_client import openrouter as or_client
-
-                if gemini_interactions.is_configured:
-                    identity = "Eres Inti, agente andino de Dopa Code. Responde en español, en primera persona.\n\n"
-                    result = await gemini_interactions.interact(model="gemini-2.5-flash", user_input=identity + content)
-                    if "error" not in result:
-                        await websocket.send_json({"event_type": "chat_response", "payload": {"content": result.get("output", ""), "model": "gemini", "usage": result.get("usage", {})}})
-                    elif or_client.is_configured:
-                        r = await or_client.chat(model="deepseek/deepseek-chat", messages=[{"role": "user", "content": content}], max_tokens=1000)
-                        await websocket.send_json({"event_type": "chat_response", "payload": {"content": r.get("content", "Error"), "model": "openrouter", "usage": r.get("usage", {})}})
-                    else:
-                        await websocket.send_json({"event_type": "error", "payload": {"error": result.get("error", "Unknown")}})
-                elif or_client.is_configured:
-                    r = await or_client.chat(model="deepseek/deepseek-chat", messages=[{"role": "user", "content": content}], max_tokens=1000)
-                    await websocket.send_json({"event_type": "chat_response", "payload": {"content": r.get("content", "Error"), "model": "openrouter", "usage": r.get("usage", {})}})
-                else:
-                    await websocket.send_json({"event_type": "error", "payload": {"error": "No LLM configured"}})
+            loop = AgentLoop(workspace=workspace)
+            await loop.run(content, emit=websocket.send_json)
 
     except WebSocketDisconnect:
         pass
