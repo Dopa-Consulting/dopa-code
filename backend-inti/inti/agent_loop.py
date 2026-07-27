@@ -436,7 +436,26 @@ class AgentLoop:
                 self.model, messages, tools=TOOL_SCHEMAS
             )
 
+            # Si OpenRouter falla (sin creditos, billing), intentar con Gemini
             if resp.get("error"):
+                from inti.gemini_interactions import gemini_interactions as gi
+
+                if gi.is_configured and ("402" in str(resp.get("detail", "")) or "credit" in str(resp.get("error", "")).lower() or "billing" in str(resp.get("error", "")).lower()):
+                    # OpenRouter sin creditos → Gemini como fallback
+                    gemini_result = await gi.interact(
+                        model="gemini-2.5-flash",
+                        user_input=user_message,
+                    )
+                    if "error" not in gemini_result:
+                        await emit({
+                            "event_type": "chat_response",
+                            "payload": {
+                                "content": gemini_result.get("output", ""),
+                                "model": "gemini (openrouter sin creditos)",
+                            },
+                        })
+                        return
+
                 await emit({
                     "event_type": "error",
                     "payload": {"error": resp["error"]},
