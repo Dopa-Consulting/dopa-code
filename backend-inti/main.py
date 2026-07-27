@@ -103,6 +103,10 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     await websocket.send_json({"event_type": "ConnectionEstablished", "job_id": "", "version": 1, "payload": {"message": "Conectado a Inti"}})
 
+    # Historial de conversación POR CONEXIÓN (Bug 1: cada mensaje era una sesión
+    # nueva; AgentLoop.run acepta `history` pero main.py nunca lo pasaba, así que
+    # Inti no recordaba nada dentro de una misma conversación).
+    history: list[dict] = []
     try:
         while True:
             data = await websocket.receive_json()
@@ -115,12 +119,27 @@ async def websocket_endpoint(websocket: WebSocket):
 
             from inti.agent_loop import AgentLoop
 
+            # Wrapper de emit para capturar la respuesta final y guardarla en el historial.
+            final_reply: dict = {"content": ""}
+
+            async def emit(ev):
+                if ev.get("event_type") == "chat_response":
+                    final_reply["content"] = ev.get("payload", {}).get("content", "")
+                await websocket.send_json(ev)
+
             loop = AgentLoop(
                 workspace=workspace,
                 profile=data.get("profile"),
                 require_approval=data.get("require_approval", False),
             )
-            await loop.run(content, emit=websocket.send_json)
+            await loop.run(content, emit=emit, history=history)
+
+            history.append({"role": "user", "content": content})
+            if final_reply["content"]:
+                history.append({"role": "assistant", "content": final_reply["content"]})
+            # Cap ≈10 turnos para no crecer sin límite ni inflar el contexto del LLM.
+            if len(history) > 20:
+                del history[: len(history) - 20]
 
     except WebSocketDisconnect:
         pass

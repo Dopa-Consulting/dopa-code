@@ -512,3 +512,37 @@ async def test_no_approval_no_checkpoint(tmp_workspace):
     last = collector[-1]
     assert last["event_type"] == "chat_response"
     assert "job_id" not in last["payload"]
+
+
+# ────────────────────────────────────────── Bug 1: memoria ───────────────────
+
+@pytest.mark.asyncio
+async def test_run_incluye_historial(tmp_workspace):
+    """Bug 1: run() debe inyectar el historial de conversación en los messages del
+    LLM (antes cada mensaje era una sesión nueva y Inti no recordaba nada)."""
+    from inti.agent_loop import AgentLoop
+
+    captured = {"messages": None}
+
+    async def mock_chat(model, messages, tools=None, **kwargs):
+        captured["messages"] = messages
+        return {"model": model, "content": "ok", "finish_reason": "stop", "tool_calls": None}
+
+    history = [
+        {"role": "user", "content": "mi nombre es Jose"},
+        {"role": "assistant", "content": "Hola Jose"},
+    ]
+
+    with patch.object(or_client.openrouter, "chat", side_effect=mock_chat):
+        async def emit(ev):
+            pass
+        loop = AgentLoop(workspace=tmp_workspace)
+        await loop.run("como me llamo?", emit=emit, history=history)
+
+    msgs = captured["messages"]
+    contents = [m.get("content") for m in msgs]
+    assert "mi nombre es Jose" in contents
+    assert "Hola Jose" in contents
+    # system primero, el mensaje nuevo al final
+    assert msgs[0]["role"] == "system"
+    assert msgs[-1]["content"] == "como me llamo?"
