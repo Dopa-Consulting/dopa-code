@@ -118,23 +118,17 @@ async def websocket_endpoint(websocket: WebSocket):
             ws_in = data.get("workspace", "")
             workspace = ws_in if ws_in and Path(ws_in).is_dir() else str(Path.cwd())
 
-            # Auto-crear sesion en el primer mensaje con titulo descriptivo
+            # Auto-crear sesion en el primer mensaje
             session_id = data.get("session_id", "")
             if not session_id:
                 from inti.orchestrator import orchestrator
                 if orchestrator.total_sessions == 0:
                     role = "builder" if content and content.lower().split()[0] in ["crea","genera","construye","hace","diseña"] else "architect"
-                    # Titulo descriptivo: primeras 5 palabras del mensaje
-                    title = " ".join(content.split()[:5]) if content else "Nueva sesion"
-                    s = orchestrator.create_session(role=role, workspace_path=workspace, metadata={"title": title[:80]})
+                    s = orchestrator.create_session(role=role, workspace_path=workspace)
                     session_id = s.id
                     await websocket.send_json({
-                        "event_type": "chat_response",
-                        "payload": {
-                            "content": f"**{title[:60]}** — workspace: `{workspace}`",
-                            "model": "inti-session",
-                            "session_id": session_id
-                        }
+                        "event_type": "session_created",
+                        "payload": {"session_id": session_id, "workspace": workspace}
                     })
 
             from inti.agent_loop import AgentLoop
@@ -144,10 +138,21 @@ async def websocket_endpoint(websocket: WebSocket):
             merged_history = client_history if client_history else history
 
             final_reply: dict = {"content": ""}
+            session_titled = False
 
             async def emit(ev):
+                nonlocal session_titled
                 if ev.get("event_type") == "chat_response":
                     final_reply["content"] = ev.get("payload", {}).get("content", "")
+                    # Poner titulo a la sesion con la primera respuesta del agente (max 60 chars)
+                    if not session_titled and final_reply["content"] and session_id:
+                        title = final_reply["content"].split("\n")[0].strip().strip("*").strip("#")[:60]
+                        if title and len(title) > 3:
+                            from inti.orchestrator import orchestrator
+                            s = orchestrator.get_session(session_id)
+                            if s and not s.metadata.get("title"):
+                                s.metadata["title"] = title
+                                session_titled = True
                 await websocket.send_json(ev)
 
             loop = AgentLoop(
