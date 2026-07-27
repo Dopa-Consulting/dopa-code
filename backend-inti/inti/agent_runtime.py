@@ -52,6 +52,21 @@ class AgentRuntime:
             self._bridge_process.terminate()
             self._bridge_process = None
 
+    async def _update_job_status(self, job_id: str, status: str) -> None:
+        try:
+            from inti.database import async_session
+            from inti.models.job import Job
+            from sqlalchemy import select
+
+            async with async_session() as session:
+                result = await session.execute(select(Job).where(Job.id == job_id))
+                job = result.scalar_one_or_none()
+                if job:
+                    job.status = status
+                    await session.commit()
+        except Exception:
+            pass
+
     async def _inject_erp_context(self, job_id: str, prompt: str) -> str:
         try:
             from inti.database import async_session
@@ -232,6 +247,7 @@ class AgentRuntime:
 
     async def plan_change(self, job_id: str, prompt: str) -> dict:
         self._audit("llm_architect", "plan_requested", job_id, f"Prompt: {prompt[:200]}")
+        await self._update_job_status(job_id, "executing")
         enhanced_prompt = await self._inject_erp_context(job_id, prompt)
         if self.dummy_mode:
             return {

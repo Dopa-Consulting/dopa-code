@@ -1,6 +1,58 @@
 import { Outlet, NavLink } from "react-router-dom";
+import { useState, useEffect } from "react";
 
-export default function Layout() {
+function LoginGate() {
+  const [token, setToken] = useState("");
+  const [authed, setAuthed] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("dopa-token") || new URLSearchParams(location.search).get("token");
+    if (saved) {
+      setToken(saved);
+      localStorage.setItem("dopa-token", saved);
+      fetch(`/login?token=${encodeURIComponent(saved)}`)
+        .then(r => { if (r.ok) setAuthed(true); })
+        .catch(() => {});
+    }
+  }, []);
+
+  const login = async () => {
+    try {
+      const r = await fetch(`/login?token=${encodeURIComponent(token)}`);
+      if (r.ok) {
+        localStorage.setItem("dopa-token", token);
+        setAuthed(true);
+        setError("");
+      } else {
+        setError("Token invalido");
+      }
+    } catch {
+      setError("Error de conexion");
+    }
+  };
+
+  if (authed) return <MainLayout />;
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-dvh p-6 text-center">
+      <h1 className="text-2xl font-bold mb-2"><span className="text-amber-400">Dopa</span> Code</h1>
+      <p className="text-slate-400 text-sm mb-6">Inti - Agente andino</p>
+      <input type="password" value={token} onChange={(e) => setToken(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && login()}
+        placeholder="Token de acceso..."
+        className="w-full max-w-xs rounded-lg bg-slate-800 border border-slate-700 px-4 py-3 text-sm text-slate-300 placeholder-slate-600 focus:outline-none focus:border-amber-500/50 mb-3" />
+      <button onClick={login}
+        className="w-full max-w-xs rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold py-3 px-4 transition-colors text-sm">
+        Entrar
+      </button>
+      {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
+      <p className="text-slate-600 text-xs mt-6">Configura DOPA_ACCESS_TOKEN en .env</p>
+    </div>
+  );
+}
+
+function MainLayout() {
   return (
     <div className="flex flex-col min-h-dvh">
       <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
@@ -18,14 +70,15 @@ export default function Layout() {
 
       <nav className="flex border-t border-slate-800 bg-slate-900">
         {[
-          { to: "/chat", label: "Chat", icon: "O" },
-          { to: "/", label: "Dashboard", icon: "=" },
+          { to: "/", label: "Chat", icon: "O" },
           { to: "/jobs", label: "Jobs", icon: "[]" },
+          { to: "/sessions", label: "Sesiones", icon: "S" },
           { to: "/models", label: "Modelos", icon: "AI" },
         ].map(({ to, label, icon }) => (
           <NavLink
             key={to}
             to={to}
+            end={to === "/"}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center py-3 text-xs gap-1 transition-colors ${
                 isActive ? "text-amber-400" : "text-slate-500"
@@ -39,4 +92,8 @@ export default function Layout() {
       </nav>
     </div>
   );
+}
+
+export default function Layout() {
+  return <LoginGate />;
 }

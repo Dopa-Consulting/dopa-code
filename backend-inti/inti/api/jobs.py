@@ -152,24 +152,69 @@ async def approve_job(job_id: str, device_id: str = "", db: AsyncSession = Depen
         raise HTTPException(status_code=404, detail="Job not found")
 
     previous = job.status
-    job.status = "approved"
+    job.status = "executing"
     await db.commit()
 
     from inti.audit import log_action
-    from inti.events import human_approval
+    from inti.agent_runtime import agent_runtime
+
+    # Ejecutar pipeline FSM real
+    plan = await agent_runtime.plan_change(job_id, job.description or job.title)
+    apply_result = await agent_runtime.apply_change(job_id, plan, f"intl/{job_id[:8]}")
+    diff_result = await agent_runtime.generate_diff(job_id, f"intl/{job_id[:8]}")
+
+    # Guardar diff en DB
+    if diff_result and "diff_text" in diff_result:
+        from inti.models.diff import Diff
+        diff = Diff(
+            job_id=job_id,
+            summary=job.title,
+            diff_text=diff_result.get("diff_text", ""),
+            files_changed=str(diff_result.get("files_changed", [])),
+            status="generated",
+        )
+        db.add(diff)
+
+    job.status = "qa_pending"
+    await db.commit()
+
+    # QA
+    qa_result = await agent_runtime.run_qa_review(job_id, diff_result.get("diff_text", ""))
+
+    # Actualizar diff con QA
+    if qa_result.get("passed"):
+        result_diff = await db.execute(
+            select(Diff).where(Diff.job_id == job_id).order_by(Diff.created_at.desc()).limit(1)
+        )
+        diff_rec = result_diff.scalar_one_or_none()
+        if diff_rec:
+            diff_rec.status = "qa_approved"
+        job.status = "approved"
+    else:
+        job.status = "qa_failed"
+    await db.commit()
+
+    # PostMortem
+    try:
+        from inti.memory import PostMortem
+        await PostMortem.run(job_id)
+    except Exception:
+        pass
 
     await log_action(
         actor_type="human",
         action="approved_job",
         job_id=job_id,
         device_id=device_id,
-        summary=f"Job {job_id} aprobado",
+        summary=f"Job {job_id} aprobado y ejecutado",
     )
 
     return {
         "job_id": job.id,
         "status": job.status,
-        "event": human_approval(job.id, "approve", device_id).to_dict(),
+        "qa_passed": qa_result.get("passed", False),
+        "plan": str(plan)[:200],
+        "event": job_state_changed(job.id, previous, job.status).to_dict(),
     }
 
 

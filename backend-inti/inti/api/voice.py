@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Body
 
 from inti.voice import parse_voice_command
 

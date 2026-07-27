@@ -1,28 +1,18 @@
 import json
 import sys
+import subprocess
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from inti.config import settings
 from inti.database import engine, Base
 from inti.models import (  # noqa: F401 - register all models for table creation
-    Job,
-    JobStep,
-    Diff,
-    Approval,
-    AuditLog,
-    Event,
-    CiRun,
-    Device,
-    ExperienceLesson,
-    SkillDefinition,
-    SkillExecution,
-    ProjectKnowledge,
-    Tenant,
-    PaymentIntegration,
+    Job, JobStep, Diff, Approval, AuditLog, Event, CiRun, Device,
+    ExperienceLesson, SkillDefinition, SkillExecution, ProjectKnowledge,
+    Tenant, PaymentIntegration,
 )
 
 
@@ -45,15 +35,10 @@ async def lifespan(app: FastAPI):
     print(banner)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-    # Load persisted provider keys on startup
     from inti.openrouter_client import openrouter, multiprovider
     or_loaded = await openrouter.load_key()
     mp_loaded = await multiprovider.load_keys()
-    provider_status = "configured" if or_loaded else "not set"
-    print(f"  OpenRouter: {provider_status} | Direct providers: {mp_loaded} loaded")
-
-    # Seed skills on startup
+    print(f"  OpenRouter: {'configured' if or_loaded else 'not set'} | Direct providers: {mp_loaded} loaded")
     from inti.skills_seeder import seed_all_skills
     skills_result = await seed_all_skills()
     print(f"  Skills: {skills_result['total']} loaded ({skills_result['new']} new, {skills_result['updated']} updated)")
@@ -76,62 +61,70 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from inti.router import api_router
+# Auth middleware
+PUBLIC_PATHS = ["/health", "/login", "/favicon.svg", "/manifest.json", "/sw.js", "/assets"]
 
+@app.middleware("http")
+async def auth_middleware(request, call_next):
+    path = request.url.path
+    if any(path.startswith(p) for p in PUBLIC_PATHS):
+        return await call_next(request)
+    token = request.cookies.get("dopa_token") or request.headers.get("x-dopa-token") or request.query_params.get("token")
+    if token == settings.access_token:
+        return await call_next(request)
+    if path == "/" or path == "/login":
+        return await call_next(request)
+    return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+
+from inti.router import api_router
 app.include_router(api_router)
 
 
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "ok",
-        "daemon": "Inti",
-        "version": settings.version,
-        "dummy_mode": settings.dopa_code_dummy,
-    }
+    return {"status": "ok", "daemon": "Inti", "version": settings.version, "dummy_mode": settings.dopa_code_dummy}
+
+
+@app.get("/login")
+async def login(token: str = ""):
+    if token == settings.access_token:
+        resp = JSONResponse({"status": "ok"})
+        resp.set_cookie("dopa_token", token, httponly=False, max_age=86400 * 30)
+        return resp
+    return JSONResponse({"error": "Invalid token"}, status_code=401)
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    await websocket.send_json({
-        "event_type": "ConnectionEstablished",
-        "job_id": "",
-        "version": 1,
-        "payload": {"message": "Conectado a Inti"},
-    })
+    await websocket.send_json({"event_type": "ConnectionEstablished", "job_id": "", "version": 1, "payload": {"message": "Conectado a Inti"}})
+
     try:
         while True:
             data = await websocket.receive_json()
+            if data.get("type") != "chat":
+                await websocket.send_json({"event_type": "Echo", "payload": {"received": str(data)[:200]}})
+                continue
 
-            if data.get("type") == "chat":
-                content = data.get("content", "")
-                workspace = str(Path.cwd())
+            content = data.get("content", "")
+            workspace = str(Path.cwd())
 
-                from inti.agent_loop import AgentLoop
+            from inti.agent_loop import AgentLoop
 
-                loop = AgentLoop(workspace=workspace)
-                await loop.run(content, emit=websocket.send_json)
-            else:
-                await websocket.send_json({
-                    "event_type": "Echo",
-                    "job_id": "",
-                    "version": 1,
-                    "payload": {"received": str(data)[:200]},
-                })
+            loop = AgentLoop(workspace=workspace)
+            await loop.run(content, emit=websocket.send_json)
+
     except WebSocketDisconnect:
         pass
 
 
-# Serve PWA static files in production
+# SPA fallback
 frontend_dist = Path(__file__).parent.parent / "frontend-pwa" / "dist"
 if getattr(sys, "frozen", False):
     frontend_dist = Path(sys._MEIPASS) / "frontend"
 
 if frontend_dist.exists() and (frontend_dist / "index.html").exists():
-    from fastapi.responses import FileResponse
-
-    # Catch-all: serve index.html for SPA client-side routing
     @app.get("/{full_path:path}")
     async def spa_fallback(full_path: str):
         file_path = frontend_dist / full_path
