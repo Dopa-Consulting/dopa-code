@@ -52,9 +52,22 @@ export default function Chat() {
     if (!connected) return;
     const unsub = subscribe("*", (e: Record<string,unknown>) => {
       const et = e.event_type as string;
-      // Block streaming events from showing as system messages
-      const blocked = ["step.delta","step.start","step.stop","interaction.created","interaction.status_update","interaction.completed","done"];
-      if (blocked.includes(et)) return;
+
+      // Mostrar herramientas ejecutandose (antes estaban bloqueadas - el usuario no veia nada)
+      if (et === "step.start") {
+        const d = (e.data || e.payload || {}) as Record<string,unknown>;
+        const tool = (d.tool as string) || (d.step_type as string) || "";
+        if (tool) {
+          setMessages((prev) => [...prev, {
+            id: crypto.randomUUID(), role: "system",
+            content: `Ejecutando: ${tool}...`,
+            timestamp: (e.timestamp as string) || new Date().toISOString(),
+          }]);
+        }
+        return;
+      }
+      if (et === "step.delta" || et === "step.stop") return;
+      if (["interaction.created","interaction.status_update","interaction.completed","done"].includes(et)) return;
 
       if (et === "chat_response") {
         setThinking(false);
