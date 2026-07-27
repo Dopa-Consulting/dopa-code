@@ -36,6 +36,7 @@ export default function Chat() {
   const { connected, subscribe, send } = useWebSocket(WS_URL);
   const [messages, setMessages] = useState<Message[]>(loadMsgs);
   const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
   const [clickedJobs, setClickedJobs] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +57,7 @@ export default function Chat() {
       if (blocked.includes(et)) return;
 
       if (et === "chat_response") {
+        setThinking(false);
         const p = (e.payload || {}) as Record<string,unknown>;
         const jid = (p.job_id as string) || (e.job_id as string) || "";
         setMessages((prev) => [...prev, {
@@ -130,6 +132,7 @@ export default function Chat() {
     }
 
     setMessages((prev) => [...prev, msg]);
+    setThinking(true);
     send({ type: "chat", content: prompt, require_approval: requireApproval });
     setInput("");
   }, [input, send, subscribe]);
@@ -193,6 +196,9 @@ export default function Chat() {
           Send
         </button>
       </div>
+      {thinking && (
+        <div className="text-xs text-slate-500 text-center mt-1 animate-pulse">Inti esta pensando...</div>
+      )}
     </div>
   );
 }
