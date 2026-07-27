@@ -10,15 +10,25 @@ from inti.config import settings
 
 SYSTEM_PROMPT = """Tu nombre es Inti. Eres el agente andino de Dopa Code, un entorno de desarrollo agentico Local-First.
 
-Eres un agente que PUEDE ejecutar herramientas para cumplir las tareas que te pidan. Tienes acceso a herramientas para leer archivos, escribir archivos, listar directorios, ejecutar comandos y ver diferencias de git.
+Eres un agente que PUEDE ejecutar herramientas para cumplir las tareas que te pidan. Tienes DOS tipos de herramientas:
+
+🔧 Herramientas locales (inspección y ediciones precisas):
+- read_file, write_file, list_dir, run_command, git_diff
+Úsalas para ediciones puntuales de 1-2 archivos, leer código, ejecutar comandos simples.
+
+🤖 OpenCode (tareas grandes multi-archivo):
+- run_opencode(task)
+Úsala para construir features completas, scaffolding de proyectos, refactors amplios, o cualquier tarea que requiera editar múltiples archivos. OpenCode es un agente especializado que escribe y revisa código.
 
 REGLAS:
 1. Usa las herramientas disponibles para completar la tarea.
-2. Observa el resultado de cada herramienta antes de decidir el siguiente paso.
-3. Responde en texto SOLO cuando la tarea esté completa o si necesitas hacer una pregunta.
-4. NO pidas confirmación para usar herramientas — simplemente úsalas.
-5. Responde siempre en español neutro, en primera persona como Inti.
-6. Sé directo y conciso.
+2. Para tareas grandes, delega a OpenCode con run_opencode.
+3. Para ediciones precisas, usa las herramientas locales.
+4. Observa el resultado de cada herramienta antes de decidir el siguiente paso.
+5. Responde en texto SOLO cuando la tarea esté completa o si necesitas hacer una pregunta.
+6. NO pidas confirmación para usar herramientas — simplemente úsalas.
+7. Responde siempre en español neutro, en primera persona como Inti.
+8. Sé directo y conciso.
 """
 
 TOOL_SCHEMAS = [
@@ -90,7 +100,28 @@ TOOL_SCHEMAS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_opencode",
+            "description": (
+                "Delega una tarea de código pesada o multi-archivo al agente OpenCode. "
+                "Úsala para construir features/proyectos completos, NO para ediciones "
+                "puntuales (para eso usa write_file/read_file)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task": {"type": "string", "description": "Descripción de la tarea a delegar a OpenCode"}
+                },
+                "required": ["task"]
+            }
+        }
+    },
 ]
+
+# Tools que streamean su propio progreso (NO deben ser envueltas por el loop)
+_STREAMING_TOOLS = {"run_opencode"}
 
 
 class AgentLoop:
@@ -111,8 +142,17 @@ class AgentLoop:
             raise ValueError(f"Ruta fuera del workspace: {path}")
         return resolved
 
-    async def execute_tool(self, name: str, args: dict) -> str:
-        """Ejecuta una herramienta y devuelve el resultado como string."""
+    async def execute_tool(
+        self,
+        name: str,
+        args: dict,
+        emit: Callable[[dict], Awaitable[None]] | None = None,
+    ) -> str:
+        """Ejecuta una herramienta y devuelve el resultado como string.
+
+        Si la herramienta streamea (ej. run_opencode), usa `emit` para enviar
+        eventos step.start/step.delta/step.stop internamente.
+        """
         try:
             if name == "read_file":
                 path = self._resolve_path(args["path"])
@@ -166,6 +206,11 @@ class AgentLoop:
                 output = stdout.decode("utf-8", errors="replace")
                 return output.strip() or "(sin cambios)"
 
+            elif name == "run_opencode":
+                if emit is None:
+                    return "Error: run_opencode requiere emit"
+                return await self._run_opencode(args["task"], emit)
+
             else:
                 return f"Error: herramienta desconocida: {name}"
 
@@ -173,6 +218,92 @@ class AgentLoop:
             return f"Error: {e}"
         except Exception as e:
             return f"Error ejecutando {name}: {type(e).__name__}: {e}"
+
+    async def _run_opencode(
+        self,
+        task: str,
+        emit: Callable[[dict], Awaitable[None]],
+    ) -> str:
+        """Ejecuta OpenCode via bridge, streameando el progreso al Chat."""
+        import httpx
+
+        BRIDGE_URL = "http://localhost:4097"
+        BRIDGE_TOKEN = "dopa-bridge-local-dev"
+
+        collected: list[str] = []
+        await emit({
+            "event_type": "step.start",
+            "data": {"tool": "run_opencode", "args": {"task": task}},
+        })
+
+        try:
+            # dummy dentro del try para que el finally emita step.stop (framing
+            # consistente en el Chat también en modo dummy).
+            if settings.dopa_code_dummy:
+                return "[DUMMY] OpenCode habría ejecutado: " + task[:200]
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{BRIDGE_URL}/run-stream",
+                    headers={"x-bridge-token": BRIDGE_TOKEN},
+                    json={
+                        "prompt": task,
+                        "directory": str(self.workspace),
+                        "agent": "build",
+                    },
+                ) as resp:
+                    if resp.status_code >= 400:
+                        return f"OpenCode bridge error {resp.status_code}"
+
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        try:
+                            chunk = json.loads(line[6:])
+                        except Exception:
+                            continue
+                        t = chunk.get("type")
+                        if t in ("stdout", "stderr"):
+                            txt = chunk.get("text", "")
+                            collected.append(txt)
+                            await emit({
+                                "event_type": "step.delta",
+                                "data": {"text": txt},
+                            })
+                        elif t == "exit":
+                            collected.append(f"[exit {chunk.get('code')}]")
+        except httpx.ConnectError:
+            return (
+                "El bridge de OpenCode no responde en :4097. "
+                "Inícialo con bun bridge.js en agent-runtime/."
+            )
+        except httpx.TimeoutException:
+            return "OpenCode excedió el tiempo límite (180s)."
+        finally:
+            await emit({
+                "event_type": "step.stop",
+                "data": {"index": 0},
+            })
+
+        # Obtener el diff resultante
+        diff_text = ""
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                r = await client.get(
+                    f"{BRIDGE_URL}/diff",
+                    params={"directory": str(self.workspace)},
+                    headers={"x-bridge-token": BRIDGE_TOKEN},
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    diff_text = data.get("diff_text", "")
+        except Exception:
+            pass
+
+        summary = "OpenCode terminó.\n" + "\n".join(collected)[-2000:]
+        if diff_text:
+            summary += "\n\nDiff:\n" + diff_text[:3000]
+        return summary
 
     async def run(
         self,
@@ -221,22 +352,29 @@ class AgentLoop:
                 name = fn["name"]
                 args = json.loads(fn["arguments"] or "{}")
 
-                await emit({
-                    "event_type": "step.start",
-                    "data": {"tool": name, "args": args},
-                })
+                is_streaming = name in _STREAMING_TOOLS
 
-                result = await self.execute_tool(name, args)
+                if is_streaming:
+                    # La tool maneja su propio framing (step.start/delta/stop)
+                    result = await self.execute_tool(name, args, emit=emit)
+                else:
+                    # Tools locales: el loop emite el framing
+                    await emit({
+                        "event_type": "step.start",
+                        "data": {"tool": name, "args": args},
+                    })
 
-                await emit({
-                    "event_type": "step.delta",
-                    "data": {"text": f"🔧 {name} → {result[:800]}"},
-                })
+                    result = await self.execute_tool(name, args)
 
-                await emit({
-                    "event_type": "step.stop",
-                    "data": {"index": i},
-                })
+                    await emit({
+                        "event_type": "step.delta",
+                        "data": {"text": f"🔧 {name} → {result[:800]}"},
+                    })
+
+                    await emit({
+                        "event_type": "step.stop",
+                        "data": {"index": i},
+                    })
 
                 messages.append({
                     "role": "tool",
