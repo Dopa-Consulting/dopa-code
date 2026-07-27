@@ -89,8 +89,8 @@ export default function DiffViewer() {
             </span>
             <span className="text-sm font-medium text-slate-300">{jobInfo.title as string}</span>
           </div>
-          {jobInfo.profile && <p className="text-xs text-slate-500">Perfil: {jobInfo.profile as string}</p>}
-          {jobInfo.description && <p className="text-xs text-slate-600 mt-1">{(jobInfo.description as string).slice(0, 200)}</p>}
+          {jobInfo.profile && <p className="text-xs text-slate-500">Perfil: {String(jobInfo.profile)}</p>}
+          {jobInfo.description && <p className="text-xs text-slate-600 mt-1">{String(jobInfo.description).slice(0, 200)}</p>}
         </div>
       )}
 
@@ -103,7 +103,7 @@ export default function DiffViewer() {
             </div>
             {diff.filesChanged && diff.filesChanged.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {(Array.isArray(diff.filesChanged) ? diff.filesChanged : []).map((f: string) => (
+                {(Array.isArray(diff.filesChanged) ? diff.filesChanged as string[] : String(diff.filesChanged).replace(/[\[\]'\"]/g, "").split(",")).filter(Boolean).map((f: string) => (
                   <span key={f} className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">{f}</span>
                 ))}
               </div>
