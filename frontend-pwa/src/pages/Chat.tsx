@@ -6,6 +6,11 @@ const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.ho
 function renderMd(text: string): string {
   let html = text
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    // Headers (must be before line breaks)
+    .replace(/^#### (.+)$/gm, "<h4 class='text-sm font-semibold text-slate-200 mt-3 mb-1'>$1</h4>")
+    .replace(/^### (.+)$/gm, "<h3 class='text-base font-semibold text-slate-100 mt-3 mb-1'>$1</h3>")
+    .replace(/^## (.+)$/gm, "<h2 class='text-lg font-bold text-white mt-4 mb-2'>$1</h2>")
+    .replace(/^# (.+)$/gm, "<h1 class='text-xl font-bold text-amber-300 mt-4 mb-2'>$1</h1>")
     // Code blocks
     .replace(/```(\w*)\n([\s\S]*?)```/g, "<pre class='bg-slate-950 border border-slate-700 rounded p-2 my-1 overflow-x-auto text-xs'><code>$2</code></pre>")
     // Inline code
@@ -17,7 +22,13 @@ function renderMd(text: string): string {
     // Strikethrough
     .replace(/~~(.+?)~~/g, "<del>$1</del>")
     // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' class='text-amber-400 underline' target='_blank'>$1</a>");
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' class='text-amber-400 underline' target='_blank'>$1</a>")
+    // Horizontal rules
+    .replace(/^---$/gm, "<hr class='border-slate-700 my-2'>")
+    // Unordered lists
+    .replace(/^- (.+)$/gm, "<li class='text-slate-300 text-sm ml-4'>$1</li>")
+    // Blockquotes
+    .replace(/^&gt; (.+)$/gm, "<blockquote class='border-l-2 border-amber-500 pl-3 italic text-slate-400 text-sm my-2'>$1</blockquote>");
 
   // Tables: parse markdown tables into HTML
   html = html.replace(/(\|[^\n]+\|\n\|[-:\s|]+\|\n(?:\|[^\n]+\|\n?)+)/g, (match) => {
