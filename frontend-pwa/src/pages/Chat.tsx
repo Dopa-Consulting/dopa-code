@@ -64,7 +64,22 @@ interface Message {
   jobId?: string;
   diff?: string;
   awaitingApproval?: boolean;
+  kind?: "tool";
+  tool?: string;
+  arg?: string;
 }
+
+// Etiqueta amigable por herramienta para el stream de actividad.
+const TOOL_META: Record<string, { icon: string; verb: string }> = {
+  read_file: { icon: "📖", verb: "Leyendo" },
+  write_file: { icon: "✍️", verb: "Escribiendo" },
+  list_dir: { icon: "📂", verb: "Listando" },
+  run_command: { icon: "⚡", verb: "Ejecutando" },
+  git_diff: { icon: "🔀", verb: "git diff" },
+  run_opencode: { icon: "🤖", verb: "OpenCode" },
+  generate_image: { icon: "🖼️", verb: "Generando imagen" },
+  recall_memory: { icon: "🧠", verb: "Recordando" },
+};
 
 const WELCOME: Message = {
   id: "welcome", role: "intl",
@@ -86,6 +101,7 @@ export default function Chat() {
   const [thinking, setThinking] = useState(false);
   const [clickedJobs, setClickedJobs] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
+  const toolRef = useRef<string | null>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -100,20 +116,36 @@ export default function Chat() {
     const unsub = subscribe("*", (e: Record<string,unknown>) => {
       const et = e.event_type as string;
 
-      // Mostrar herramientas ejecutandose (antes estaban bloqueadas - el usuario no veia nada)
+      // Stream de actividad: una tarjeta por herramienta con su resultado.
+      // (Antes el resultado —step.delta— se tiraba y solo se veía "Ejecutando...".)
       if (et === "step.start") {
         const d = (e.data || e.payload || {}) as Record<string,unknown>;
         const tool = (d.tool as string) || (d.step_type as string) || "";
-        if (tool) {
-          setMessages((prev) => [...prev, {
-            id: crypto.randomUUID(), role: "system",
-            content: `Ejecutando: ${tool}...`,
-            timestamp: (e.timestamp as string) || new Date().toISOString(),
-          }]);
+        if (!tool) return;
+        const args = (d.args || {}) as Record<string,unknown>;
+        const arg = (args.path || args.command || args.task || args.prompt || "") as string;
+        const mid = crypto.randomUUID();
+        toolRef.current = mid;
+        setMessages((prev) => [...prev, {
+          id: mid, role: "system", kind: "tool", tool, arg: String(arg).slice(0, 200),
+          content: "",
+          timestamp: (e.timestamp as string) || new Date().toISOString(),
+        }]);
+        return;
+      }
+      if (et === "step.delta") {
+        const d = (e.data || e.payload || {}) as Record<string,unknown>;
+        let text = (d.text as string) || "";
+        // El backend prefija "🔧 tool → resultado"; lo sacamos (el header ya dice la tool).
+        text = text.replace(/^🔧\s+\S+\s+→\s+/, "");
+        const tid = toolRef.current;
+        if (text && tid) {
+          setMessages((prev) => prev.map((m) =>
+            m.id === tid ? { ...m, content: (m.content + (m.content ? "\n" : "") + text).slice(-4000) } : m));
         }
         return;
       }
-      if (et === "step.delta" || et === "step.stop") return;
+      if (et === "step.stop") { toolRef.current = null; return; }
       if (["interaction.created","interaction.status_update","interaction.completed","done"].includes(et)) return;
 
       if (et === "chat_response") {
@@ -255,7 +287,21 @@ export default function Chat() {
                 📋
               </button>
             </div>
-            <div className="text-sm text-slate-300 [&_strong]:text-amber-300 [&_code]:text-cyan-300 [&_pre]:my-2" dangerouslySetInnerHTML={{ __html: renderMd(m.content || "...") }} />
+            {m.kind === "tool" ? (
+              <details className="text-xs">
+                <summary className="cursor-pointer select-none text-slate-400 hover:text-slate-200">
+                  <span>{TOOL_META[m.tool || ""]?.icon || "🔧"}</span>{" "}
+                  <span className="text-slate-300">{TOOL_META[m.tool || ""]?.verb || m.tool}</span>
+                  {m.arg && <span className="font-mono text-cyan-300"> {m.arg}</span>}
+                  {!m.content && <span className="text-slate-600"> …</span>}
+                </summary>
+                {m.content && (
+                  <pre className="mt-1 bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-60 text-slate-400 whitespace-pre-wrap text-[11px]">{m.content}</pre>
+                )}
+              </details>
+            ) : (
+              <div className="text-sm text-slate-300 [&_strong]:text-amber-300 [&_code]:text-cyan-300 [&_pre]:my-2" dangerouslySetInnerHTML={{ __html: renderMd(m.content || "...") }} />
+            )}
 
             {m.awaitingApproval && (
               <pre className="bg-slate-950 border border-slate-700 rounded p-2 my-2 overflow-auto text-xs max-h-80 leading-tight">
