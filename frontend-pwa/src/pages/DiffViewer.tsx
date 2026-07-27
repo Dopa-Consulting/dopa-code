@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { syncDiffs, getLocalDiffs, approveJob, rejectJob, type Diff } from "../services/sync";
-import useDeploy from "../hooks/useDeploy";
+import { syncDiffs, getLocalDiffs, approveJob, rejectJob, type Diff } from "../services/sync";
 
 const STATUS_COLORS: Record<string, string> = {
   generated: "bg-blue-500/20 text-blue-400",
@@ -27,7 +27,6 @@ export default function DiffViewer() {
   const [diffs, setDiffs] = useState<Diff[]>([]);
   const [jobInfo, setJobInfo] = useState<Record<string,unknown>>({});
   const [actionStatus, setActionStatus] = useState<"idle" | "sending" | "sent" | "offline">("idle");
-  const { ciStatus, deploy, merge, setEasyPanelToken } = useDeploy(jobId || "");
 
   useEffect(() => {
     if (!jobId) return;
