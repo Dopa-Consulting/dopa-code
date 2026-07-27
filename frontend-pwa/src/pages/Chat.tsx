@@ -62,6 +62,8 @@ interface Message {
   content: string;
   timestamp: string;
   jobId?: string;
+  diff?: string;
+  awaitingApproval?: boolean;
 }
 
 const WELCOME: Message = {
@@ -118,12 +120,37 @@ export default function Chat() {
         setThinking(false);
         const p = (e.payload || {}) as Record<string,unknown>;
         const jid = (p.job_id as string) || (e.job_id as string) || "";
+        const content = (p.content as string) || "Sin respuesta";
+        // El card con diff + approve/reject lo renderiza DiffReadyForApproval; acá
+        // evitamos duplicar el texto "Propuse cambios".
+        if (content.includes("Propuse cambios")) return;
         setMessages((prev) => [...prev, {
           id: crypto.randomUUID(), role: "intl",
-          content: (p.content as string) || "Sin respuesta",
+          content,
           timestamp: (e.timestamp as string) || new Date().toISOString(),
           jobId: jid,
         }]);
+        return;
+      }
+      if (et === "DiffReadyForApproval") {
+        setThinking(false);
+        const p = (e.payload || {}) as Record<string,unknown>;
+        const jid = (p.job_id as string) || (e.job_id as string) || "";
+        const mid = crypto.randomUUID();
+        setMessages((prev) => [...prev, {
+          id: mid, role: "intl",
+          content: `Propuse cambios (job #${jid.slice(0,8)}). Revisá el diff y aprobá o rechazá:`,
+          timestamp: (e.timestamp as string) || new Date().toISOString(),
+          jobId: jid, awaitingApproval: true, diff: "",
+        }]);
+        // Traer el diff REAL del backend y adjuntarlo al card (inline, como OpenCode).
+        fetch(`/api/v1/jobs/${jid}/diffs`)
+          .then((r) => r.json())
+          .then((data) => {
+            const dt = (data?.diffs?.[0]?.diff_text as string) || "";
+            if (dt) setMessages((prev) => prev.map((m) => (m.id === mid ? { ...m, diff: dt } : m)));
+          })
+          .catch(() => {});
         return;
       }
       if (et === "JobStateChanged") {
@@ -230,7 +257,21 @@ export default function Chat() {
             </div>
             <div className="text-sm text-slate-300 [&_strong]:text-amber-300 [&_code]:text-cyan-300 [&_pre]:my-2" dangerouslySetInnerHTML={{ __html: renderMd(m.content || "...") }} />
 
-            {m.jobId && m.role === "intl" && m.content.includes("Propuse cambios") && (
+            {m.awaitingApproval && (
+              <pre className="bg-slate-950 border border-slate-700 rounded p-2 my-2 overflow-auto text-xs max-h-80 leading-tight">
+                {m.diff
+                  ? m.diff.split("\n").map((line, i) => (
+                      <div key={i} className={
+                        line.startsWith("+") && !line.startsWith("+++") ? "text-emerald-400" :
+                        line.startsWith("-") && !line.startsWith("---") ? "text-red-400" :
+                        line.startsWith("@@") ? "text-cyan-400" : "text-slate-500"
+                      }>{line || " "}</div>
+                    ))
+                  : <span className="text-slate-600">Cargando diff…</span>}
+              </pre>
+            )}
+
+            {m.jobId && m.role === "intl" && m.awaitingApproval && (
               <div className="flex gap-2 mt-3">
                 <button onClick={() => handleApprove(m.jobId!)}
                   disabled={clickedJobs.has(m.jobId)}
