@@ -3,6 +3,17 @@ import useWebSocket from "../hooks/useWebSocket";
 
 const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 
+function renderMd(text: string): string {
+  return text
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/```(\w*)\n([\s\S]*?)```/g, "<pre class='bg-slate-950 border border-slate-700 rounded p-2 my-1 overflow-x-auto text-xs'><code>$2</code></pre>")
+    .replace(/`([^`]+)`/g, "<code class='bg-slate-700 px-1 rounded text-xs'>$1</code>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong class='text-white'>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/~~(.+?)~~/g, "<del>$1</del>")
+    .replace(/\n/g, "<br>");
+}
+
 interface Message {
   id: string;
   role: "intl" | "user" | "system";
@@ -152,7 +163,7 @@ export default function Chat() {
                 📋
               </button>
             </div>
-            <div className="text-sm text-slate-300 whitespace-pre-wrap">{m.content || "..."}</div>
+            <div className="text-sm text-slate-300 [&_strong]:text-amber-300 [&_code]:text-cyan-300 [&_pre]:my-2" dangerouslySetInnerHTML={{ __html: renderMd(m.content || "...") }} />
 
             {m.jobId && m.role === "intl" && (
               <div className="flex gap-2 mt-3">
