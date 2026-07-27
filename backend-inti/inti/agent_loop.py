@@ -447,7 +447,6 @@ class AgentLoop:
 
     async def _create_checkpoint(self, user_message: str, emit: Callable[[dict], Awaitable[None]]) -> str | None:
         """Captura diff del working tree, crea Job+Diff en DB, emite DiffReadyForApproval."""
-        import asyncio
         import subprocess
 
         from inti.database import async_session
