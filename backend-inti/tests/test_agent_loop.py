@@ -578,3 +578,66 @@ async def test_run_auto_inyecta_memoria(tmp_workspace, monkeypatch):
     assert system_msg["role"] == "system"
     # la memoria quedó inyectada en el system prompt
     assert "usar Geist en DopaWeb" in system_msg["content"]
+
+
+# ─────────────────────────────── generate_image ──────────────────────────────
+
+@pytest.mark.asyncio
+async def test_generate_image_guarda_png(tmp_workspace, monkeypatch):
+    """generate_image usa generateContent (no interact) y guarda el PNG real
+    extraído de inlineData — la versión previa usaba interact() y nunca producía
+    imagen (se colgaba)."""
+    import base64
+    import httpx
+    from pathlib import Path
+    from inti.agent_loop import AgentLoop
+    from inti.config import settings
+
+    monkeypatch.setattr(settings, "google_api_key", "AIzaTESTKEY")
+    monkeypatch.setattr(settings, "dopa_code_dummy", False)
+
+    png_b64 = base64.b64encode(b"\x89PNG_fake_bytes").decode()
+
+    class FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {
+                "candidates": [
+                    {"content": {"parts": [
+                        {"inlineData": {"mimeType": "image/png", "data": png_b64}}
+                    ]}}
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, *a, **k):
+            return FakeResp()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    events = []
+
+    async def emit(ev):
+        events.append(ev)
+
+    loop = AgentLoop(workspace=tmp_workspace)
+    result = await loop._generate_image(
+        {"prompt": "un sol andino", "filename": "portada.png"}, emit
+    )
+
+    saved = Path(tmp_workspace) / "portada.png"
+    assert saved.exists()
+    assert saved.read_bytes() == b"\x89PNG_fake_bytes"  # el base64 real se guardó
+    assert "portada.png" in result
+    assert any(e["event_type"] == "step.start" for e in events)
+    assert any(e["event_type"] == "step.stop" for e in events)
