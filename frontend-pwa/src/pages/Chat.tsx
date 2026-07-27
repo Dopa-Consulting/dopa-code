@@ -210,6 +210,7 @@ export default function Chat() {
       <div className="flex gap-2 mt-3">
         <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSend()}
           placeholder="crea landing page / Hola Inti / git status"
+          autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
           className="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-4 py-2.5 text-sm text-slate-300 placeholder-slate-600 focus:outline-none focus:border-amber-500/50" />
         <button onClick={handleSend} disabled={!input.trim()}
           className="rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold px-4 py-2.5 transition-colors text-sm">
