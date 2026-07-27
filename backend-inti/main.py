@@ -115,7 +115,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             content = data.get("content", "")
-            workspace = str(Path.cwd())
+            ws_in = data.get("workspace", "")
+            workspace = ws_in if ws_in and Path(ws_in).is_dir() else str(Path.cwd())
 
             from inti.agent_loop import AgentLoop
 

@@ -254,18 +254,32 @@ export default function Chat() {
       role: m.role === "user" ? "user" : "assistant",
       content: m.content
     }));
-    send({ type: "chat", content: prompt, require_approval: requireApproval, history: chatHistory });
+    send({ type: "chat", content: prompt, require_approval: requireApproval, history: chatHistory, workspace: localStorage.getItem("dopa-workspace") || "" });
     setInput("");
   }, [input, send, subscribe]);
 
   return (
     <div className="flex flex-col h-[calc(100dvh-120px)]">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">Chat</h2>
+        <button onClick={() => { setMessages([WELCOME]); localStorage.removeItem("dopa-chat"); }}
+          className="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
+          title="Nuevo chat">
+          + Nuevo
+        </button>
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} />
           <span className="text-xs text-slate-500">{connected ? "online" : "reconectando..."}</span>
         </div>
+      </div>
+
+      <div className="mb-2 flex items-center gap-2">
+        <input
+          value={localStorage.getItem("dopa-workspace") || ""}
+          onChange={(e) => localStorage.setItem("dopa-workspace", e.target.value)}
+          placeholder="D:\proyectos\mi-repo"
+          className="flex-1 rounded bg-slate-800 border border-slate-700 px-2 py-1 text-xs text-slate-400 font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500/50"
+        />
+        <span className="text-xs text-slate-600">workspace</span>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-2">
