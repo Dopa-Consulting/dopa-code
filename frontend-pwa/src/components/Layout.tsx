@@ -3,7 +3,11 @@ import { useState, useEffect } from "react";
 
 function LoginGate() {
   const [token, setToken] = useState("");
-  const [authed, setAuthed] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const [authed, setAuthed] = useState(() => {
+    const saved = localStorage.getItem("dopa-token");
+    return !!saved;  // optimistic: si hay token guardado, asumir autenticado
+  });
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -12,10 +16,19 @@ function LoginGate() {
       setToken(saved);
       localStorage.setItem("dopa-token", saved);
       fetch(`/login?token=${encodeURIComponent(saved)}`)
-        .then(r => { if (r.ok) setAuthed(true); })
-        .catch(() => {});
+        .then(r => {
+          setAuthed(r.ok);
+          setChecked(true);
+        })
+        .catch(() => setChecked(true));
+    } else {
+      setChecked(true);
     }
   }, []);
+
+  // No mostrar login hasta verificar el token guardado
+  if (!checked && authed) return null;  // loading state, mantener UI previa
+  if (!checked) return null;
 
   const login = async () => {
     try {

@@ -364,7 +364,7 @@ class AgentLoop:
 
             tool_calls = resp.get("tool_calls")
             if not tool_calls:
-                # LLM terminó. Si require_approval, crear checkpoint en vez de respuesta directa.
+                # LLM terminó. Si require_approval, crear checkpoint.
                 if self.require_approval:
                     job_id = await self._create_checkpoint(user_message, emit)
                     if job_id:
@@ -374,6 +374,21 @@ class AgentLoop:
                                 "content": (
                                     f"Propuse cambios (job {job_id[:8]}). "
                                     "Revisa el diff y aprueba o rechaza."
+                                ),
+                                "model": self.model,
+                                "job_id": job_id,
+                            },
+                        })
+                        return
+                    # Sin cambios en git → igual crear job simple con la respuesta
+                    job_id = await self._create_simple_checkpoint(user_message, resp.get("content", ""), emit)
+                    if job_id:
+                        await emit({
+                            "event_type": "chat_response",
+                            "payload": {
+                                "content": (
+                                    f"{resp.get('content', '')}\n\n"
+                                    f"(Job {job_id[:8]} creado sin cambios de codigo)"
                                 ),
                                 "model": self.model,
                                 "job_id": job_id,
@@ -438,6 +453,28 @@ class AgentLoop:
                 "model": self.model,
             },
         })
+
+    async def _create_simple_checkpoint(self, user_message: str, response: str, emit: Callable[[dict], Awaitable[None]]) -> str | None:
+        """Crea un Job simple sin diff (cuando no hubo cambios en el working tree)."""
+        from inti.database import async_session
+        from inti.models.job import Job
+        from inti.events import job_state_changed
+
+        async with async_session() as session:
+            job = Job(
+                title=user_message[:120],
+                description=f"{user_message}\n\nRespuesta del agente:\n{response}",
+                profile=self.profile or "pro_mix",
+                repo_id=str(self.workspace),
+                status="awaiting_approval",
+            )
+            session.add(job)
+            await session.commit()
+            await session.refresh(job)
+            job_id = job.id
+
+        await emit(job_state_changed(job_id, "running", "awaiting_approval").to_dict())
+        return job_id
 
     async def _create_checkpoint(self, user_message: str, emit: Callable[[dict], Awaitable[None]]) -> str | None:
         """Captura diff del working tree, crea Job+Diff en DB, emite DiffReadyForApproval."""
