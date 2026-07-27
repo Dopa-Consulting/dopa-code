@@ -139,11 +139,12 @@ _STREAMING_TOOLS = {"run_opencode"}
 
 
 class AgentLoop:
-    def __init__(self, workspace: str, model: str | None = None, project_id: str | None = None, profile: str | None = None):
+    def __init__(self, workspace: str, model: str | None = None, project_id: str | None = None, profile: str | None = None, require_approval: bool = False):
         self.workspace = Path(workspace).resolve()
         self.model = model or settings.architect_model
         self.project_id = project_id
         self.profile = profile
+        self.require_approval = require_approval
         self.max_iterations = 10
 
     def _resolve_path(self, path: str) -> Path:
@@ -369,6 +370,23 @@ class AgentLoop:
 
             tool_calls = resp.get("tool_calls")
             if not tool_calls:
+                # LLM terminó. Si require_approval, crear checkpoint en vez de respuesta directa.
+                if self.require_approval:
+                    job_id = await self._create_checkpoint(user_message, emit)
+                    if job_id:
+                        await emit({
+                            "event_type": "chat_response",
+                            "payload": {
+                                "content": (
+                                    f"Propuse cambios (job {job_id[:8]}). "
+                                    "Revisa el diff y aprueba o rechaza."
+                                ),
+                                "model": self.model,
+                                "job_id": job_id,
+                            },
+                        })
+                        return
+                # Sin checkpoint → chat_response normal
                 await emit({
                     "event_type": "chat_response",
                     "payload": {
@@ -426,6 +444,69 @@ class AgentLoop:
                 "model": self.model,
             },
         })
+
+    async def _create_checkpoint(self, user_message: str, emit: Callable[[dict], Awaitable[None]]) -> str | None:
+        """Captura diff del working tree, crea Job+Diff en DB, emite DiffReadyForApproval."""
+        import asyncio
+        import subprocess
+
+        from inti.database import async_session
+        from inti.models.job import Job
+        from inti.models.diff import Diff
+        from inti.events import diff_ready, job_state_changed
+
+        ws = str(self.workspace)
+
+        # ¿Es repo git?
+        chk = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=ws, capture_output=True, text=True,
+        )
+        if chk.returncode != 0:
+            return None  # no es git → sin checkpoint
+
+        # Capturar diff de todo el working tree (incluye archivos nuevos)
+        subprocess.run(["git", "add", "-A"], cwd=ws, capture_output=True, text=True)
+        diff = subprocess.run(
+            ["git", "diff", "--cached"],
+            cwd=ws, capture_output=True, text=True,
+        ).stdout
+        if not diff.strip():
+            return None  # nada que aprobar
+
+        names_out = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            cwd=ws, capture_output=True, text=True,
+        ).stdout.strip()
+        names = names_out.split("\n") if names_out else []
+
+        async with async_session() as session:
+            job = Job(
+                title=user_message[:120],
+                description=user_message,
+                profile=self.profile or "pro_mix",
+                repo_id=ws,
+                status="awaiting_approval",
+            )
+            session.add(job)
+            await session.commit()
+            await session.refresh(job)
+
+            diff_rec = Diff(
+                job_id=job.id,
+                summary=user_message[:200],
+                diff_text=diff[:50000],
+                files_changed=str(names),
+                status="pending",
+            )
+            session.add(diff_rec)
+            await session.commit()
+            await session.refresh(diff_rec)
+            job_id, diff_id = job.id, diff_rec.id
+
+        await emit(job_state_changed(job_id, "running", "awaiting_approval").to_dict())
+        await emit(diff_ready(job_id, diff_id, user_message[:200], len(names)).to_dict())
+        return job_id
 
 
 # Instancia global
