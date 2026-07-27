@@ -300,7 +300,8 @@ async def test_gate_blocks_protected_file(tmp_workspace, monkeypatch):
     from inti.agent_loop import AgentLoop
     from inti import guardrails as gr
 
-    async def mock_validate(project_type, diff_text, files_changed):
+    # validate_diff real es SÍNCRONO (def, no async) → el mock también debe serlo.
+    def mock_validate(project_type, diff_text, files_changed):
         return {
             "passed": False,
             "violations": [
