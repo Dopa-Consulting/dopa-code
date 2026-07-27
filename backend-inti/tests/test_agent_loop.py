@@ -404,5 +404,111 @@ async def test_recall_memory_dummy(tmp_workspace, monkeypatch):
 
     step_deltas = [e for e in collector if e["event_type"] == "step.delta"]
     assert len(step_deltas) == 1
-    # MemoryContext en dummy mode devuelve "[DUMMY]..." o markdown con skills
-    content = step_deltas[0]["data"]["text"]
+    # MemoryContext en dummy devuelve string no vacío
+    assert len(step_deltas[0]["data"]["text"]) > 0
+
+
+# ────────────────────────────────────────── Slice 4 ──────────────────────────
+
+@pytest.mark.asyncio
+async def test_checkpoint_creates_job_and_diff(test_db, tmp_workspace, monkeypatch):
+    """Slice 4 · Caso A: require_approval=True → crea Job+Diff en DB + emite DiffReady."""
+    import subprocess
+    from inti.agent_loop import AgentLoop
+    from inti.models.job import Job
+    from inti.models.diff import Diff
+    from sqlalchemy import select
+
+    # Inicializar repo git en el workspace
+    subprocess.run(["git", "init"], cwd=tmp_workspace, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", "init"],
+        cwd=tmp_workspace,
+        capture_output=True,
+        text=True,
+        env={"GIT_AUTHOR_NAME": "test", "GIT_COMMITTER_NAME": "test", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_EMAIL": "t@t"},
+    )
+
+    calls = 0
+
+    async def mock_chat(model, messages, tools=None, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return {
+                "model": model, "content": None, "finish_reason": "tool_calls",
+                "tool_calls": [{
+                    "id": "c1", "type": "function",
+                    "function": {"name": "write_file", "arguments": '{"path":"test.md","content":"# Test"}'},
+                }],
+            }
+        else:
+            return {"model": model, "content": "Listo", "finish_reason": "stop", "tool_calls": None}
+
+    with patch.object(or_client.openrouter, "chat", side_effect=mock_chat):
+        collector = []
+        async def emit(event):
+            collector.append(event)
+        loop = AgentLoop(workspace=tmp_workspace, require_approval=True)
+        await loop.run("crea test.md", emit=emit)
+
+    # Verificar Job creado
+    async with test_db() as session:
+        result = await session.execute(select(Job).order_by(Job.created_at.desc()).limit(1))
+        job = result.scalar_one_or_none()
+        assert job is not None
+        assert job.status == "awaiting_approval"
+
+        # Verificar Diff creado
+        result = await session.execute(select(Diff).where(Diff.job_id == job.id))
+        diff_rec = result.scalar_one_or_none()
+        assert diff_rec is not None
+        assert len(diff_rec.diff_text) > 0
+
+    # Verificar evento DiffReadyForApproval emitido
+    diff_ready_events = [e for e in collector if e["event_type"] == "DiffReadyForApproval"]
+    assert len(diff_ready_events) == 1
+
+    # Verificar chat_response con job_id
+    last = collector[-1]
+    assert last["event_type"] == "chat_response"
+    assert "job_id" in last["payload"]
+
+
+@pytest.mark.asyncio
+async def test_no_approval_no_checkpoint(tmp_workspace):
+    """Slice 4 · Caso B: require_approval=False → sin Job, chat_response normal."""
+    import subprocess
+    from inti.agent_loop import AgentLoop
+
+    subprocess.run(["git", "init"], cwd=tmp_workspace, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", "init"],
+        cwd=tmp_workspace,
+        capture_output=True,
+        text=True,
+        env={"GIT_AUTHOR_NAME": "test", "GIT_COMMITTER_NAME": "test", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_EMAIL": "t@t"},
+    )
+
+    calls = 0
+
+    async def mock_chat(model, messages, tools=None, **kwargs):
+        nonlocal calls
+        calls += 1
+        return {"model": model, "content": "Listo", "finish_reason": "stop", "tool_calls": None}
+
+    with patch.object(or_client.openrouter, "chat", side_effect=mock_chat):
+        collector = []
+        async def emit(event):
+            collector.append(event)
+        loop = AgentLoop(workspace=tmp_workspace, require_approval=False)
+        await loop.run("tarea simple", emit=emit)
+
+    # Sin eventos DiffReady
+    diff_ready_events = [e for e in collector if e["event_type"] == "DiffReadyForApproval"]
+    assert len(diff_ready_events) == 0
+
+    # chat_response normal sin job_id
+    last = collector[-1]
+    assert last["event_type"] == "chat_response"
+    assert "job_id" not in last["payload"]
