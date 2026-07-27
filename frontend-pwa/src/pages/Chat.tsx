@@ -291,7 +291,18 @@ export default function Chat() {
           placeholder="D:\proyectos\mi-repo"
           className="flex-1 rounded bg-slate-800 border border-slate-700 px-2 py-1 text-xs text-slate-400 font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500/50"
         />
-        <span className="text-xs text-slate-600">workspace</span>
+        <button onClick={async () => {
+          try {
+            const r = await fetch("/api/v1/workspace/browse");
+            const d = await r.json();
+            if (d.path) { setWorkspace(d.path); localStorage.setItem("dopa-workspace", d.path); }
+          } catch { /* fallback */ }
+        }}
+          className="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
+          title="Explorar carpetas">
+          📁
+        </button>
+        <span className="text-xs text-slate-600">ws</span>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-2">

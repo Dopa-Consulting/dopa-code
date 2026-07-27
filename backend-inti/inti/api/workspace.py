@@ -7,6 +7,24 @@ from fastapi import APIRouter, Query, HTTPException
 router = APIRouter()
 
 
+@router.get("/browse")
+async def browse_folder():
+    """Abre un dialogo nativo de Windows para seleccionar carpeta."""
+    import subprocess
+    result = subprocess.run(
+        ["powershell", "-Command",
+         "Add-Type -AssemblyName System.Windows.Forms; "
+         "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
+         "$f.Description = 'Selecciona el workspace de Dopa Code'; "
+         "if ($f.ShowDialog() -eq 'OK') { $f.SelectedPath } else { '' }"],
+        capture_output=True, text=True, timeout=30,
+    )
+    path = result.stdout.strip()
+    if path:
+        return {"path": path}
+    return {"path": ""}
+
+
 @router.get("/changes")
 async def workspace_changes(path: str = Query(...)):
     """Devuelve el git status del workspace."""
