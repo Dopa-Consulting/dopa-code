@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from inti.database import get_db
 from inti.models.job import Job
 from inti.models.diff import Diff
-from inti.policies import TaskProfile, AutonomyLevel, ProjectType, get_profile, PROFILES
+from inti.policies import TaskProfile, AutonomyLevel, ProjectType, PROFILES
 from inti.events import job_state_changed, diff_ready
 
 router = APIRouter()
@@ -119,29 +119,6 @@ async def create_job(
     }
 
 
-@router.post("/{job_id}/start")
-async def start_job(job_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Job).where(Job.id == job_id))
-    job = result.scalar_one_or_none()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    previous = job.status
-    job.status = "executing"
-    await db.commit()
-
-    from inti.agent_runtime import agent_runtime
-    profile_config = get_profile(job.profile)
-    plan_result = agent_runtime.plan_change(job_id, job.description)
-
-    return {
-        "job_id": job.id,
-        "status": job.status,
-        "profile": profile_config.name,
-        "architect_model": profile_config.architect.model,
-        "plan": plan_result,
-        "event": job_state_changed(job.id, previous, "executing").to_dict(),
-    }
 
 
 @router.post("/{job_id}/approve")
