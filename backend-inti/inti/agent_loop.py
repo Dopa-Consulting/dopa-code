@@ -7,6 +7,7 @@ from typing import Callable, Awaitable
 
 from inti.openrouter_client import openrouter
 from inti.config import settings
+from inti.guardrails import guardrail_engine
 
 SYSTEM_PROMPT = """Tu nombre es Inti. Eres el agente andino de Dopa Code, un entorno de desarrollo agentico Local-First.
 
@@ -29,6 +30,8 @@ REGLAS:
 6. NO pidas confirmación para usar herramientas — simplemente úsalas.
 7. Responde siempre en español neutro, en primera persona como Inti.
 8. Sé directo y conciso.
+9. Puedes usar recall_memory para consultar lecciones previas y skills del proyecto.
+10. Algunos archivos están protegidos por guardrails. Si un write_file es bloqueado, NO insistas — explícale al usuario que ese archivo está protegido y por qué.
 """
 
 TOOL_SCHEMAS = [
@@ -118,6 +121,17 @@ TOOL_SCHEMAS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "recall_memory",
+            "description": (
+                "Recupera skills, lecciones previas y conocimiento del proyecto relevantes. "
+                "Úsala antes de tareas grandes para no repetir errores."
+            ),
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
 ]
 
 # Tools que streamean su propio progreso (NO deben ser envueltas por el loop)
@@ -125,9 +139,11 @@ _STREAMING_TOOLS = {"run_opencode"}
 
 
 class AgentLoop:
-    def __init__(self, workspace: str, model: str | None = None):
+    def __init__(self, workspace: str, model: str | None = None, project_id: str | None = None, profile: str | None = None):
         self.workspace = Path(workspace).resolve()
         self.model = model or settings.architect_model
+        self.project_id = project_id
+        self.profile = profile
         self.max_iterations = 10
 
     def _resolve_path(self, path: str) -> Path:
@@ -141,6 +157,16 @@ class AgentLoop:
         if resolved != self.workspace and not resolved.is_relative_to(self.workspace):
             raise ValueError(f"Ruta fuera del workspace: {path}")
         return resolved
+
+    def _check_guardrails(self, files_changed: list[str], diff_text: str) -> str | None:
+        """Ejecuta el gate de guardrails. Devuelve None si pasa, o string de bloqueo."""
+        if not self.profile:
+            return None
+        res = guardrail_engine.validate_diff(self.profile, diff_text, files_changed)
+        if res.get("passed", True):
+            return None
+        msgs = "; ".join(v["message"] for v in res.get("violations", []))
+        return f"BLOQUEADO por guardrails ({self.profile}): {msgs}"
 
     async def execute_tool(
         self,
@@ -162,6 +188,12 @@ class AgentLoop:
 
             elif name == "write_file":
                 path = self._resolve_path(args["path"])
+
+                # Gate de guardrails ANTES de escribir
+                block = self._check_guardrails([args["path"]], args["content"])
+                if block:
+                    return block
+
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(args["content"], encoding="utf-8")
                 return f"Archivo escrito: {args['path']} ({len(args['content'])} caracteres)"
@@ -210,6 +242,11 @@ class AgentLoop:
                 if emit is None:
                     return "Error: run_opencode requiere emit"
                 return await self._run_opencode(args["task"], emit)
+
+            elif name == "recall_memory":
+                from inti.memory import MemoryContext
+                return await MemoryContext.get_context_for_job(
+                    self.project_id, self.profile or "general", limit=5)
 
             else:
                 return f"Error: herramienta desconocida: {name}"

@@ -112,7 +112,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             from inti.agent_loop import AgentLoop
 
-            loop = AgentLoop(workspace=workspace)
+            loop = AgentLoop(workspace=workspace, profile=data.get("profile"))
             await loop.run(content, emit=websocket.send_json)
 
     except WebSocketDisconnect:
