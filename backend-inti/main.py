@@ -133,7 +133,7 @@ async def websocket_endpoint(websocket: WebSocket):
             loop = AgentLoop(
                 workspace=workspace,
                 profile=data.get("profile"),
-                require_approval=data.get("require_approval", False),
+                require_approval=data.get("require_approval", data.get("profile") is not None),
             )
             await loop.run(content, emit=emit, history=merged_history)
 
