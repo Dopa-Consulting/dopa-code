@@ -118,17 +118,23 @@ async def websocket_endpoint(websocket: WebSocket):
             ws_in = data.get("workspace", "")
             workspace = ws_in if ws_in and Path(ws_in).is_dir() else str(Path.cwd())
 
-            # Auto-crear sesion en el primer mensaje
+            # Auto-crear sesion en el primer mensaje con titulo descriptivo
             session_id = data.get("session_id", "")
             if not session_id:
                 from inti.orchestrator import orchestrator
                 if orchestrator.total_sessions == 0:
                     role = "builder" if content and content.lower().split()[0] in ["crea","genera","construye","hace","diseña"] else "architect"
-                    s = orchestrator.create_session(role=role, workspace_path=workspace)
+                    # Titulo descriptivo: primeras 5 palabras del mensaje
+                    title = " ".join(content.split()[:5]) if content else "Nueva sesion"
+                    s = orchestrator.create_session(role=role, workspace_path=workspace, metadata={"title": title[:80]})
                     session_id = s.id
                     await websocket.send_json({
                         "event_type": "chat_response",
-                        "payload": {"content": f"Sesion {role} `{s.id[:12]}` iniciada en {workspace}", "model": "inti-session"}
+                        "payload": {
+                            "content": f"**{title[:60]}** — workspace: `{workspace}`",
+                            "model": "inti-session",
+                            "session_id": session_id
+                        }
                     })
 
             from inti.agent_loop import AgentLoop
