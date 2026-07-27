@@ -330,6 +330,8 @@ class OpenRouterClient:
         temperature: float = 0.7,
         max_tokens: int = 8000,
         stream: bool = False,
+        tools: list | None = None,
+        tool_choice: str = "auto",
     ) -> dict:
         if not self.is_configured:
             return {"error": "OpenRouter API key not configured"}
@@ -343,6 +345,10 @@ class OpenRouterClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
 
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
@@ -366,6 +372,7 @@ class OpenRouterClient:
                     "model": data.get("model", model),
                     "content": choice.get("message", {}).get("content", ""),
                     "finish_reason": choice.get("finish_reason", "unknown"),
+                    "tool_calls": choice.get("message", {}).get("tool_calls"),
                     "usage": {
                         "prompt_tokens": usage.get("prompt_tokens", 0),
                         "completion_tokens": usage.get("completion_tokens", 0),

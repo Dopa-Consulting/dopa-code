@@ -106,91 +106,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if data.get("type") == "chat":
                 content = data.get("content", "")
-                use_stream = data.get("stream", False)
-                workspace = str(Path.cwd())  # workspace actual
+                workspace = str(Path.cwd())
 
-                # 1. Primero: intentar ejecutar como comando real
-                from inti.chat_commands import execute_chat_command
+                from inti.agent_loop import AgentLoop
 
-                cmd_result = await execute_chat_command(workspace, content)
-                if cmd_result["type"] == "action":
-                    await websocket.send_json({
-                        "event_type": "chat_response",
-                        "payload": {"content": cmd_result["content"], "model": "inti-action"}
-                    })
-                    continue
-
-                # 2. Si no es comando → LLM
-                from inti.gemini_interactions import gemini_interactions
-                from inti.gemini_interactions import gemini_interactions
-
-                if gemini_interactions.is_configured and use_stream:
-                    async for chunk in gemini_interactions.interact_stream(
-                        model=data.get("model", "gemini-2.5-flash"),
-                        user_input=content,
-                    ):
-                        await websocket.send_json(chunk)
-                elif gemini_interactions.is_configured:
-                    identity = (
-                        "Tu nombre es Inti. Eres el agente andino de Dopa Code, "
-                        "un entorno de desarrollo agentico Local-First. "
-                        "Orquestas agentes que escriben, revisan y despliegan codigo. "
-                        "NO eres un chatbot generico. NO estas basado en dopamina ni neurociencia. "
-                        "Responde siempre en español, en primera persona como Inti.\n\n"
-                    )
-                    result = await gemini_interactions.interact(
-                        model=data.get("model", "gemini-2.5-flash"),
-                        user_input=identity + content,
-                    )
-                    if "error" not in result:
-                        await websocket.send_json({
-                            "event_type": "chat_response",
-                            "payload": {"content": result.get("output", ""), "model": result.get("model", "gemini"), "usage": result.get("usage", {})}
-                        })
-                    else:
-                        # Gemini fallo, cae a OpenRouter
-                        from inti.openrouter_client import openrouter
-                        if openrouter.is_configured:
-                            or_result = await openrouter.chat(
-                                model="deepseek/deepseek-chat",
-                                messages=[{"role": "user", "content": content}],
-                                max_tokens=1000,
-                            )
-                            await websocket.send_json({
-                                "event_type": "chat_response",
-                                "payload": {
-                                    "content": or_result.get("content", or_result.get("error", "Error")),
-                                    "model": "openrouter (gemini fallback)",
-                                    "usage": or_result.get("usage", {}),
-                                }
-                            })
-                        else:
-                            await websocket.send_json({
-                                "event_type": "error",
-                                "payload": {"error": result.get("error", "Unknown error")}
-                            })
-                else:
-                    # Fallback to OpenRouter
-                    from inti.openrouter_client import openrouter
-                    if openrouter.is_configured:
-                        result = await openrouter.chat(
-                            model="deepseek/deepseek-chat",
-                            messages=[{"role": "user", "content": content}],
-                            max_tokens=1000,
-                        )
-                        await websocket.send_json({
-                            "event_type": "chat_response",
-                            "payload": {
-                                "content": result.get("content", result.get("error", "Error")),
-                                "model": result.get("model", "openrouter"),
-                                "usage": result.get("usage", {}),
-                            }
-                        })
-                    else:
-                        await websocket.send_json({
-                            "event_type": "error",
-                            "payload": {"error": "No LLM configured. Configura OpenRouter o Gemini en Modelos."}
-                        })
+                loop = AgentLoop(workspace=workspace)
+                await loop.run(content, emit=websocket.send_json)
             else:
                 await websocket.send_json({
                     "event_type": "Echo",
