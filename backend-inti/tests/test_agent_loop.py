@@ -170,3 +170,25 @@ async def test_path_escape_rejected(tmp_workspace):
     assert len(step_deltas) >= 1
     result_text = step_deltas[0]["data"]["text"]
     assert "fuera" in result_text or "escape" in result_text.lower() or "Error" in result_text
+
+
+def test_resolve_path_rejects_sibling_prefix(tmp_path):
+    """El confinamiento usa is_relative_to, no startswith: un directorio hermano
+    con prefijo común (ws vs ws-evil) DEBE rechazarse. Este caso pasaba con el
+    check viejo por coincidencia de string."""
+    from inti.agent_loop import AgentLoop
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    loop = AgentLoop(workspace=str(ws))
+
+    # dentro del workspace: OK
+    assert loop._resolve_path("sub/archivo.txt")
+
+    # hermano con prefijo común: DEBE rechazarse
+    with pytest.raises(ValueError):
+        loop._resolve_path("../ws-evil/secret.txt")
+
+    # escape clásico con ../: DEBE rechazarse
+    with pytest.raises(ValueError):
+        loop._resolve_path("../../etc/passwd")

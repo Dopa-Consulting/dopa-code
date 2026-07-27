@@ -2,7 +2,6 @@
 
 import json
 import asyncio
-import subprocess
 from pathlib import Path
 from typing import Callable, Awaitable
 
@@ -101,9 +100,14 @@ class AgentLoop:
         self.max_iterations = 10
 
     def _resolve_path(self, path: str) -> Path:
-        """Resuelve una ruta relativa al workspace y verifica que no escape."""
+        """Resuelve una ruta relativa al workspace y verifica que no escape.
+
+        Usa is_relative_to (no startswith) para que un directorio hermano con
+        prefijo común — p.ej. workspace `.../ws` y ruta `../ws-evil/x` — NO pase
+        el check por coincidencia de string.
+        """
         resolved = (self.workspace / path).resolve()
-        if not str(resolved).startswith(str(self.workspace)):
+        if resolved != self.workspace and not resolved.is_relative_to(self.workspace):
             raise ValueError(f"Ruta fuera del workspace: {path}")
         return resolved
 
