@@ -4,14 +4,45 @@ import useWebSocket from "../hooks/useWebSocket";
 const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 
 function renderMd(text: string): string {
-  return text
+  let html = text
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    // Code blocks
     .replace(/```(\w*)\n([\s\S]*?)```/g, "<pre class='bg-slate-950 border border-slate-700 rounded p-2 my-1 overflow-x-auto text-xs'><code>$2</code></pre>")
-    .replace(/`([^`]+)`/g, "<code class='bg-slate-700 px-1 rounded text-xs'>$1</code>")
+    // Inline code
+    .replace(/`([^`]+)`/g, "<code class='bg-slate-700 px-1 rounded text-xs text-cyan-300'>$1</code>")
+    // Bold
     .replace(/\*\*(.+?)\*\*/g, "<strong class='text-white'>$1</strong>")
+    // Italic
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    // Strikethrough
     .replace(/~~(.+?)~~/g, "<del>$1</del>")
-    .replace(/\n/g, "<br>");
+    // Links
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' class='text-amber-400 underline' target='_blank'>$1</a>");
+
+  // Tables: parse markdown tables into HTML
+  html = html.replace(/(\|[^\n]+\|\n\|[-:\s|]+\|\n(?:\|[^\n]+\|\n?)+)/g, (match) => {
+    const lines = match.trim().split("\n").filter(l => l.includes("|"));
+    if (lines.length < 2) return match;
+    const headerCells = lines[0].split("|").filter(c => c.trim());
+    const bodyLines = lines.slice(2); // skip header + separator
+    let table = "<table class='w-full text-xs border-collapse my-2'><thead><tr class='bg-slate-800'>";
+    for (const cell of headerCells) {
+      table += `<th class='border border-slate-700 px-2 py-1 text-left text-slate-200'>${cell.trim()}</th>`;
+    }
+    table += "</tr></thead><tbody>";
+    for (const line of bodyLines) {
+      const cells = line.split("|").filter(c => c.trim());
+      table += "<tr class='border-t border-slate-800'>";
+      for (const cell of cells) {
+        table += `<td class='border border-slate-700 px-2 py-1 text-slate-400'>${cell.trim()}</td>`;
+      }
+      table += "</tr>";
+    }
+    table += "</tbody></table>";
+    return table;
+  });
+
+  return html.replace(/\n/g, "<br>");
 }
 
 interface Message {
