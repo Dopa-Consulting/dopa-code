@@ -188,7 +188,7 @@ export default function Chat() {
             </div>
             <div className="text-sm text-slate-300 [&_strong]:text-amber-300 [&_code]:text-cyan-300 [&_pre]:my-2" dangerouslySetInnerHTML={{ __html: renderMd(m.content || "...") }} />
 
-            {m.jobId && m.role === "intl" && (
+            {m.jobId && m.role === "intl" && m.content.includes("Propuse cambios") && (
               <div className="flex gap-2 mt-3">
                 <button onClick={() => handleApprove(m.jobId!)}
                   disabled={clickedJobs.has(m.jobId)}

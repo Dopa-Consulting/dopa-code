@@ -290,11 +290,19 @@ class AgentLoop:
 
         result = await gemini_interactions.interact(
             model="gemini-2.5-flash-image",
-            user_input=prompt,
+            user_input=f"Generate ONLY an image: {prompt}. Do not respond with text, only generate the image.",
         )
 
-        if "error" in result:
-            return f"Error generando imagen: {result['error']}"
+        if "error" in result or not any(
+            block.get("type") == "image"
+            for step in result.get("steps", [])
+            for block in step.get("content", [])
+        ):
+            # Retry con Nano Banana 2 Lite
+            result = await gemini_interactions.interact(
+                model="gemini-3.1-flash-lite-image",
+                user_input=f"Generate an image of: {prompt}",
+            )
 
         # Extraer imagen base64 de la respuesta
         import base64
