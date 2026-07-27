@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { syncDiffs, getLocalDiffs, approveJob, rejectJob, type Diff } from "../services/sync";
-import { syncDiffs, getLocalDiffs, approveJob, rejectJob, type Diff } from "../services/sync";
 
 const STATUS_COLORS: Record<string, string> = {
   generated: "bg-blue-500/20 text-blue-400",
@@ -12,13 +11,6 @@ const STATUS_COLORS: Record<string, string> = {
   executing: "bg-blue-500/20 text-blue-400",
   approved: "bg-emerald-600/20 text-emerald-300",
   cancelled: "bg-red-800/20 text-red-300",
-};
-
-const CI_COLORS: Record<string, string> = {
-  pending: "bg-slate-500 text-slate-300",
-  running: "bg-amber-500/20 text-amber-400",
-  passed: "bg-emerald-500/20 text-emerald-400",
-  failed: "bg-red-500/20 text-red-400",
 };
 
 export default function DiffViewer() {
@@ -80,33 +72,20 @@ export default function DiffViewer() {
         <button onClick={() => navigate("/jobs")} className="text-xs text-slate-500">← Jobs</button>
       </div>
 
-      {jobInfo && Object.keys(jobInfo).length > 0 && (
+      {Object.keys(jobInfo).length > 0 && (
         <div className="rounded-lg bg-slate-900 border border-slate-800 p-3 space-y-1">
           <div className="flex items-center gap-2">
             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[String(jobInfo.status)] || "bg-slate-700"}`}>
               {String(jobInfo.status || "unknown")}
             </span>
-            <span className="text-sm font-medium text-slate-300">{String(jobInfo.title || "")}</span>
+            <span className="text-sm font-medium text-slate-300">{String(jobInfo.title)}</span>
           </div>
-          {(jobInfo.profile as string) && <p className="text-xs text-slate-500">Perfil: {String(jobInfo.profile)}</p>}
-          {(jobInfo.description as string) && <p className="text-xs text-slate-600 mt-1">{String(jobInfo.description).slice(0, 200)}</p>}
         </div>
       )}
 
       {diffs.length > 0 ? (
         diffs.map((diff) => (
           <div key={diff.id} className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[diff.status] || "bg-slate-700"}`}>{diff.status}</span>
-              <span className="text-xs text-slate-500">{diff.summary}</span>
-            </div>
-            {diff.filesChanged && diff.filesChanged.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {(Array.isArray(diff.filesChanged) ? diff.filesChanged as string[] : String(diff.filesChanged).replace(/[\[\]'\"]/g, "").split(",")).filter(Boolean).map((f: string) => (
-                  <span key={f} className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">{f}</span>
-                ))}
-              </div>
-            )}
             {diff.diffText && (
               <div className="rounded-lg bg-slate-950 border border-slate-800 overflow-x-auto max-h-96 overflow-y-auto">
                 {renderDiffText(diff.diffText)}
@@ -116,8 +95,7 @@ export default function DiffViewer() {
         ))
       ) : (
         <div className="rounded-lg bg-slate-900 border border-slate-800 p-4 text-center">
-          <p className="text-sm text-slate-500">No hay diffs de codigo para este job.</p>
-          <p className="text-xs text-slate-600 mt-1">Este job puede haber sido de consulta o generacion sin cambios en archivos.</p>
+          <p className="text-sm text-slate-500">Sin cambios de codigo en este job.</p>
         </div>
       )}
 
