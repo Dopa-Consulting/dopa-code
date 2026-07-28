@@ -641,6 +641,8 @@ class MultiProviderClient:
                 return {
                     "model": data.get("model", model),
                     "content": choice.get("message", {}).get("content", ""),
+                    "tool_calls": choice.get("message", {}).get("tool_calls"),
+                    "finish_reason": choice.get("finish_reason", "unknown"),
                     "usage": {
                         "prompt_tokens": usage.get("prompt_tokens", 0),
                         "completion_tokens": usage.get("completion_tokens", 0),

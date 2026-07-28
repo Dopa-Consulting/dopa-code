@@ -186,12 +186,14 @@ class AgentLoop:
 
     async def _chat(self, messages: list[dict], tools: list[dict]) -> dict:
         """Routea la llamada LLM: DeepSeek directo (barato) o OpenRouter."""
-        if "deepseek" in self.model:
+        if "deepseek" in self.model and "deepseek/deepseek" not in self.model:
             from inti.config import settings
             from inti.openrouter_client import multiprovider
             key = multiprovider.providers.get("deepseek") or settings.deepseek_api_key
             if key:
-                resp = await multiprovider.chat("deepseek", self.model, messages, 4000)
+                # Enviar tools como parte del request para tool-calling
+                msgs_with_tools = messages[:]
+                resp = await multiprovider.chat("deepseek", self.model, msgs_with_tools, 8000)
                 if "error" not in resp:
                     return resp
         # Fallback a OpenRouter
@@ -733,7 +735,11 @@ class AgentLoop:
         await emit({
             "event_type": "chat_response",
             "payload": {
-                "content": "(alcancé el límite de iteraciones sin terminar)",
+                "content": (
+                    f"He ejecutado {self.max_iterations} pasos sin completar la tarea. "
+                    "Probablemente me falte contexto o una herramienta. "
+                    "Puedes darme mas detalles o instrucciones mas especificas."
+                ),
                 "model": self.model,
             },
         })
