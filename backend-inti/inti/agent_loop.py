@@ -669,10 +669,16 @@ class AgentLoop:
                         })
                         return
                 # Sin checkpoint → chat_response normal
+                content = resp.get("content", "")
+                # Si el contenido es puro JSON (el LLM intento tool-calling por texto), limpiarlo
+                if content.strip().startswith("```json"):
+                    content = content.replace("```json", "").replace("```", "").strip()
+                    if len(content) < 20:
+                        content = "Procesando tu solicitud. Intentemos algo mas especifico."
                 await emit({
                     "event_type": "chat_response",
                     "payload": {
-                        "content": resp.get("content", ""),
+                        "content": content,
                         "model": self.model,
                     },
                 })
