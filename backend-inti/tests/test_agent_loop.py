@@ -77,9 +77,13 @@ async def test_golden_path_write_file(tmp_workspace):
 
 
 @pytest.mark.asyncio
-async def test_run_command_timeout(tmp_workspace):
-    """Caso 2: run_command respeta timeout y no cuelga."""
+async def test_run_command_timeout(tmp_workspace, monkeypatch):
+    """Caso 2: run_command respeta el timeout (subprocess.run en thread) y no cuelga.
+    Usa un sleep de Python (cross-platform) + timeout corto via config."""
     from inti.agent_loop import AgentLoop
+    from inti.config import settings
+
+    monkeypatch.setattr(settings, "run_command_timeout", 2)
 
     calls = 0
 
@@ -97,7 +101,7 @@ async def test_run_command_timeout(tmp_workspace):
                         "type": "function",
                         "function": {
                             "name": "run_command",
-                            "arguments": '{"command": "sleep 60"}',
+                            "arguments": '{"command": "python -c \\"import time; time.sleep(10)\\""}',
                         },
                     }
                 ],

@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60
 
     dopa_code_dummy: bool = False
+    # Timeout de run_command (segundos). Configurable via DOPA_RUN_COMMAND_TIMEOUT.
+    # 120s por default para no matar builds largos (npm install, pytest, etc.).
+    run_command_timeout: int = 120
     openrouter_api_key: str = ""
     antigravity_api_key: str = ""
 

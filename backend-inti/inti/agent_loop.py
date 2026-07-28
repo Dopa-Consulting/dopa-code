@@ -2,6 +2,7 @@
 
 import json
 import asyncio
+import subprocess
 from pathlib import Path
 from typing import Callable, Awaitable
 
@@ -240,37 +241,41 @@ class AgentLoop:
                 return "\n".join(items) if items else "(directorio vacío)"
 
             elif name == "run_command":
-                proc = await asyncio.create_subprocess_shell(
-                    args["command"],
-                    cwd=str(self.workspace),
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
+                # subprocess.run en un thread. asyncio.create_subprocess_shell lanza
+                # NotImplementedError en Windows bajo el SelectorEventLoop (uvicorn) →
+                # dejaba a Inti sin terminal. to_thread evita la maquinaria de
+                # subprocess del event loop y funciona en cualquier plataforma.
+                timeout_s = getattr(settings, "run_command_timeout", 120)
                 try:
-                    stdout, stderr = await asyncio.wait_for(
-                        proc.communicate(), timeout=30.0
+                    result = await asyncio.to_thread(
+                        subprocess.run,
+                        args["command"],
+                        shell=True,
+                        cwd=str(self.workspace),
+                        capture_output=True,
+                        text=True,
+                        timeout=timeout_s,
                     )
-                except asyncio.TimeoutError:
-                    proc.kill()
-                    return "Error: el comando excedió el tiempo límite (30s)"
-
-                output = stdout.decode("utf-8", errors="replace")
-                if stderr:
-                    output += "\n[stderr]\n" + stderr.decode("utf-8", errors="replace")
+                except subprocess.TimeoutExpired:
+                    return f"Error: el comando excedió el tiempo límite ({timeout_s}s)"
+                output = result.stdout or ""
+                if result.stderr:
+                    output += "\n[stderr]\n" + result.stderr
                 return output.strip() or "(sin salida)"
 
             elif name == "git_diff":
-                proc = await asyncio.create_subprocess_shell(
-                    "git diff",
-                    cwd=str(self.workspace),
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=15.0
-                )
-                output = stdout.decode("utf-8", errors="replace")
-                return output.strip() or "(sin cambios)"
+                try:
+                    result = await asyncio.to_thread(
+                        subprocess.run,
+                        ["git", "diff"],
+                        cwd=str(self.workspace),
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                    )
+                except subprocess.TimeoutExpired:
+                    return "Error: git diff excedió el tiempo límite (15s)"
+                return (result.stdout or "").strip() or "(sin cambios)"
 
             elif name == "run_opencode":
                 if emit is None:
