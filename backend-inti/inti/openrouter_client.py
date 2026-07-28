@@ -585,7 +585,7 @@ class MultiProviderClient:
         return bool(key) and not key.endswith("...")
 
     async def chat(
-        self, provider: str, model: str, messages: list[dict], max_tokens: int = 8000
+        self, provider: str, model: str, messages: list[dict], max_tokens: int = 8000, tools: list | None = None
     ) -> dict:
         api_key = self.providers.get(provider) or getattr(settings, f"{provider}_api_key", "")
 
@@ -604,11 +604,11 @@ class MultiProviderClient:
             return {"error": f"Unknown provider: {provider}"}
 
         if provider == "deepseek":
-            return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens)
+            return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens, tools)
         elif provider == "openai":
-            return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens)
+            return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens, tools)
         elif provider == "groq":
-            return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens)
+            return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens, tools)
         elif provider == "anthropic":
             return await self._chat_anthropic(api_key, endpoint, model, messages, max_tokens)
         elif provider == "google":
@@ -617,21 +617,25 @@ class MultiProviderClient:
             return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens)
 
     async def _chat_openai_compat(
-        self, api_key: str, endpoint: str, model: str, messages: list[dict], max_tokens: int
+        self, api_key: str, endpoint: str, model: str, messages: list[dict], max_tokens: int, tools: list | None = None
     ) -> dict:
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
+                payload: dict = {
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                }
+                if tools:
+                    payload["tools"] = tools
+                    payload["tool_choice"] = "auto"
                 resp = await client.post(
                     endpoint,
                     headers={
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json",
                     },
-                    json={
-                        "model": model,
-                        "messages": messages,
-                        "max_tokens": max_tokens,
-                    },
+                    json=payload,
                 )
                 if resp.status_code != 200:
                     return {"error": f"API error {resp.status_code}", "detail": resp.text[:500]}

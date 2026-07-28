@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     qa_model: str = "anthropic/claude-opus-4.8-20260528"
 
     # Routing de modelos (Part A del brief cost-routing)
-    loop_model: str = "deepseek/deepseek-chat"      # Default barato para el loop
-    heavy_model: str = "anthropic/claude-opus-4.8-20260528"  # Opus para tareas pesadas
+    loop_model: str = "deepseek-chat"      # DeepSeek V4 Pro via API directa (sin OpenRouter markup)
+    heavy_model: str = "anthropic/claude-opus-4.8-20260528"  # Opus via OpenRouter para tareas pesadas
 
     easypanel_deploy_token: str = ""
     easypanel_endpoint: str = "https://easypanel.io"

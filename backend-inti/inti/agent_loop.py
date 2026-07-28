@@ -201,9 +201,7 @@ class AgentLoop:
             from inti.openrouter_client import multiprovider
             key = multiprovider.providers.get("deepseek") or settings.deepseek_api_key
             if key:
-                # Enviar tools como parte del request para tool-calling
-                msgs_with_tools = messages[:]
-                resp = await multiprovider.chat("deepseek", self.model, msgs_with_tools, 8000)
+                resp = await multiprovider.chat("deepseek", self.model, messages, 8000, tools=tools)
                 if "error" not in resp:
                     return resp
         # Fallback a OpenRouter
