@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     qa_model: str = "anthropic/claude-opus-4.8-20260528"
 
     # Routing de modelos (Part A del brief cost-routing)
-    loop_model: str = "deepseek/deepseek-chat"   # DeepSeek V4 via OpenRouter (Hermes lo usa con tools)
+    loop_model: str = "deepseek-v4-flash"   # DeepSeek V4 Flash via API directa
+    heavy_model: str = "deepseek-v4-pro"    # DeepSeek V4 Pro via API directa
     heavy_model: str = "deepseek/deepseek-chat"   # Mismo por ahora
 
     easypanel_deploy_token: str = ""
