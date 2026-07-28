@@ -173,16 +173,29 @@ _STREAMING_TOOLS = {"run_opencode", "generate_image"}
 
 
 class AgentLoop:
-    def __init__(self, workspace: str, model: str | None = None, project_id: str | None = None, profile: str | None = None, require_approval: bool = False, allowed_dirs: list[str] | None = None):
+    def __init__(self, workspace: str, model: str | None = None, project_id: str | None = None, profile: str | None = None, require_approval: bool = False, allowed_dirs: list[str] | None = None, use_heavy_model: bool = False):
         self.workspace = Path(workspace).resolve()
-        self.model = model or settings.architect_model
+        self.model = model or (settings.heavy_model if use_heavy_model else settings.loop_model)
+        self.heavy_model = settings.heavy_model
+        self.use_heavy_model = use_heavy_model
         self.project_id = project_id
         self.profile = profile
         self.require_approval = require_approval
-        self.max_iterations = 10
+        self.max_iterations = 6
         self.allowed_dirs = [Path(d).resolve() for d in (allowed_dirs or []) if Path(d).is_dir()]
 
-    def _resolve_path(self, path: str) -> Path:
+    async def _chat(self, messages: list[dict], tools: list[dict]) -> dict:
+        """Routea la llamada LLM: DeepSeek directo (barato) o OpenRouter."""
+        if "deepseek" in self.model:
+            from inti.config import settings
+            from inti.openrouter_client import multiprovider
+            key = multiprovider.providers.get("deepseek") or settings.deepseek_api_key
+            if key:
+                resp = await multiprovider.chat("deepseek", self.model, messages, 4000)
+                if "error" not in resp:
+                    return resp
+        # Fallback a OpenRouter
+        return await openrouter.chat(self.model, messages, tools=tools)
         """Resuelve una ruta relativa al workspace y verifica que no escape.
 
         Usa is_relative_to (no startswith) para que un directorio hermano con
@@ -291,6 +304,9 @@ class AgentLoop:
                 return await MemoryContext.get_context_for_job(
                     self.project_id, self.profile or "general", limit=5)
 
+            elif name == "save_memory":
+                return await self._save_memory(args)
+
             elif name == "generate_image":
                 return await self._generate_image(args, emit)
 
@@ -304,6 +320,35 @@ class AgentLoop:
             return f"Error: {e}"
         except Exception as e:
             return f"Error ejecutando {name}: {type(e).__name__}: {e}"
+
+    async def _save_memory(self, args: dict) -> str:
+        """Guarda informacion en ProjectKnowledge (persistente entre sesiones)."""
+        from inti.database import async_session
+        from inti.models.project_knowledge import ProjectKnowledge
+        from sqlalchemy import select
+
+        key = args.get("key", "")
+        value = args.get("value", "")
+        if not key or not value:
+            return "Error: key y value requeridos"
+
+        pid = self.project_id or "general"
+        async with async_session() as session:
+            result = await session.execute(
+                select(ProjectKnowledge).where(
+                    ProjectKnowledge.project_id == pid,
+                    ProjectKnowledge.key == key,
+                )
+            )
+            entry = result.scalar_one_or_none()
+            if entry:
+                entry.value = value
+            else:
+                entry = ProjectKnowledge(project_id=pid, key=key, value=value)
+                session.add(entry)
+            await session.commit()
+
+        return f"Guardado: {key} = {value[:500]} (proyecto: {pid})"
 
     async def _generate_image(self, args: dict, emit: Callable[[dict], Awaitable[None]] | None) -> str:
         """Genera una imagen con Gemini (Nano Banana) vía el endpoint generateContent
@@ -536,12 +581,31 @@ class AgentLoop:
             {"role": "system", "content": system_content},
             *(history or []),
             {"role": "user", "content": user_message},
-        ]
+    {
+        "type": "function",
+        "function": {
+            "name": "save_memory",
+            "description": (
+                "Guarda informacion en la memoria del proyecto (aprendizajes, "
+                "preferencias, datos clave). Usa recall_memory para recuperarla."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "Clave para guardar (ej: 'preferencia_colores')"},
+                    "value": {"type": "string", "description": "Valor a guardar"},
+                },
+                "required": ["key", "value"]
+            }
+        }
+    },
+]
 
-        for _ in range(self.max_iterations):
-            resp = await openrouter.chat(
-                self.model, messages, tools=TOOL_SCHEMAS
-            )
+        previous_tool_calls: set[str] = set()  # Guard contra repeticion
+
+        for iteration in range(self.max_iterations):
+            # Routing: DeepSeek directo (sin OpenRouter markup) o OpenRouter
+            resp = await self._chat(messages, TOOL_SCHEMAS)
 
             # Si OpenRouter falla (sin creditos, billing), intentar con Gemini
             if resp.get("error"):
@@ -571,7 +635,7 @@ class AgentLoop:
 
             tool_calls = resp.get("tool_calls")
             if not tool_calls:
-                # LLM terminó. Si require_approval, crear checkpoint.
+                # LLM terminó.
                 if self.require_approval:
                     job_id = await self._create_checkpoint(user_message, emit)
                     if job_id:
@@ -622,6 +686,19 @@ class AgentLoop:
                 fn = tc["function"]
                 name = fn["name"]
                 args = json.loads(fn["arguments"] or "{}")
+
+                # Loop guard: detectar repeticion exacta de tool+args
+                call_key = f"{name}:{json.dumps(args, sort_keys=True)}"
+                if call_key in previous_tool_calls and iteration > 0:
+                    await emit({
+                        "event_type": "chat_response",
+                        "payload": {
+                            "content": f"Detecte que estoy repitiendo la misma accion ({name}). Me detengo para no gastar tokens.",
+                            "model": self.model,
+                        },
+                    })
+                    return
+                previous_tool_calls.add(call_key)
 
                 is_streaming = name in _STREAMING_TOOLS
 

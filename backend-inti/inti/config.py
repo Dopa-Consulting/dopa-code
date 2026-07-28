@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     executor_model: str = "anthropic/claude-opus-4.8-20260528"
     qa_model: str = "anthropic/claude-opus-4.8-20260528"
 
+    # Routing de modelos (Part A del brief cost-routing)
+    loop_model: str = "deepseek/deepseek-chat"      # Default barato para el loop
+    heavy_model: str = "anthropic/claude-opus-4.8-20260528"  # Opus para tareas pesadas
+
     easypanel_deploy_token: str = ""
     easypanel_endpoint: str = "https://easypanel.io"
 
