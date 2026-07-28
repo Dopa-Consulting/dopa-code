@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     qa_model: str = "anthropic/claude-opus-4.8-20260528"
 
     # Routing de modelos (Part A del brief cost-routing)
-    loop_model: str = "deepseek-v4-flash"      # DeepSeek V4 Flash via API directa (rapido + barato)
-    heavy_model: str = "deepseek-chat"          # DeepSeek V4 Pro para tareas pesadas
+    loop_model: str = "google/gemini-2.5-flash"  # Gemini Flash via OpenRouter (tool-calling + barato)
+    heavy_model: str = "deepseek/deepseek-chat"   # DeepSeek V4 via OpenRouter para tareas pesadas
 
     easypanel_deploy_token: str = ""
     easypanel_endpoint: str = "https://easypanel.io"
