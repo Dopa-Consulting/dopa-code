@@ -245,6 +245,8 @@ class AgentLoop:
             if name == "read_file":
                 path = self._resolve_path(args["path"])
                 if not path.is_file():
+                    if "schemas" in args["path"] or "tools/" in args["path"]:
+                        return "Error: no existe tools/schemas.py. Las tools estan en inti/agent_loop.py (TOOL_SCHEMAS). Usa read_file con path=ini/agent_loop.py."
                     return f"Error: el archivo no existe: {args['path']}"
                 return path.read_text(encoding="utf-8")
 
