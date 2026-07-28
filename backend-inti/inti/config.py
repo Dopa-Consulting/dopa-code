@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     qa_model: str = "anthropic/claude-opus-4.8-20260528"
 
     # Routing de modelos (Part A del brief cost-routing)
-    loop_model: str = "google/gemini-2.5-flash"  # Gemini Flash via OpenRouter (tool-calling + barato)
-    heavy_model: str = "deepseek/deepseek-chat"   # DeepSeek V4 via OpenRouter para tareas pesadas
+    loop_model: str = "qwen/qwen-3-30b-a3b"  # Qwen 3 30B via OpenRouter (gratis + tool-calling probado)
+    heavy_model: str = "anthropic/claude-sonnet-4-20250514"  # Sonnet 4 via OpenRouter
 
     easypanel_deploy_token: str = ""
     easypanel_endpoint: str = "https://easypanel.io"
