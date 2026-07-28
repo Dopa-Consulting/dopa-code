@@ -184,6 +184,16 @@ class AgentLoop:
         self.max_iterations = 6
         self.allowed_dirs = [Path(d).resolve() for d in (allowed_dirs or []) if Path(d).is_dir()]
 
+    def _resolve_path(self, path: str) -> Path:
+        """Resuelve una ruta relativa al workspace. Permite allowed_dirs."""
+        resolved = (self.workspace / path).resolve()
+        if resolved != self.workspace and not resolved.is_relative_to(self.workspace):
+            for ad in self.allowed_dirs:
+                if resolved == ad or resolved.is_relative_to(ad):
+                    return resolved
+            raise ValueError(f"Ruta fuera del workspace: {path}")
+        return resolved
+
     async def _chat(self, messages: list[dict], tools: list[dict]) -> dict:
         """Routea la llamada LLM: DeepSeek directo (barato) o OpenRouter."""
         if "deepseek" in self.model and "deepseek/deepseek" not in self.model:
