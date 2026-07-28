@@ -168,6 +168,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 workspace=workspace,
                 profile=data.get("profile"),
                 require_approval=data.get("require_approval", data.get("profile") is not None),
+                allowed_dirs=data.get("allowed_dirs"),
             )
             await loop.run(content, emit=emit, history=merged_history)
 
@@ -176,6 +177,19 @@ async def websocket_endpoint(websocket: WebSocket):
                 history.append({"role": "assistant", "content": final_reply["content"]})
             if len(history) > 20:
                 del history[: len(history) - 20]
+
+            # Persistir mensajes en DB
+            if session_id:
+                try:
+                    from inti.database import async_session as a_s
+                    from inti.models.conversation_message import ConversationMessage
+                    async with a_s() as db:
+                        db.add(ConversationMessage(session_id=session_id, role="user", content=content))
+                        if final_reply["content"]:
+                            db.add(ConversationMessage(session_id=session_id, role="assistant", content=final_reply["content"]))
+                        await db.commit()
+                except Exception:
+                    pass
 
     except WebSocketDisconnect:
         pass

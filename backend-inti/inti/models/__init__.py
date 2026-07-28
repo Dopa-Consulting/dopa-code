@@ -12,6 +12,7 @@ from inti.models.skill_execution import SkillExecution
 from inti.models.project_knowledge import ProjectKnowledge
 from inti.models.tenant import Tenant
 from inti.models.payment_integration import PaymentIntegration
+from inti.models.conversation_message import ConversationMessage
 
 __all__ = [
     "Job",

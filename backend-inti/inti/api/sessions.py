@@ -121,3 +121,39 @@ async def complete_session(session_id: str, success: bool = True):
 async def remove_session(session_id: str):
     ok = orchestrator.remove_session(session_id)
     return {"status": "removed" if ok else "not_found", "session_id": session_id}
+
+
+# --- Mensajes de sesion persistentes ---
+
+from fastapi import Depends
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from inti.database import get_db
+from inti.models.conversation_message import ConversationMessage
+
+
+@router.get("/{session_id}/messages")
+async def get_messages(session_id: str, limit: int = 100, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(ConversationMessage)
+        .where(ConversationMessage.session_id == session_id)
+        .order_by(ConversationMessage.created_at.asc())
+        .limit(limit)
+    )
+    msgs = result.scalars().all()
+    return {
+        "messages": [
+            {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at.isoformat() if m.created_at else None}
+            for m in msgs
+        ],
+        "total": len(msgs),
+    }
+
+
+@router.post("/{session_id}/messages")
+async def save_message(session_id: str, role: str = "user", content: str = "", db: AsyncSession = Depends(get_db)):
+    msg = ConversationMessage(session_id=session_id, role=role, content=content)
+    db.add(msg)
+    await db.commit()
+    await db.refresh(msg)
+    return {"id": msg.id, "status": "saved"}

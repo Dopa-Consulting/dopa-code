@@ -173,13 +173,14 @@ _STREAMING_TOOLS = {"run_opencode", "generate_image"}
 
 
 class AgentLoop:
-    def __init__(self, workspace: str, model: str | None = None, project_id: str | None = None, profile: str | None = None, require_approval: bool = False):
+    def __init__(self, workspace: str, model: str | None = None, project_id: str | None = None, profile: str | None = None, require_approval: bool = False, allowed_dirs: list[str] | None = None):
         self.workspace = Path(workspace).resolve()
         self.model = model or settings.architect_model
         self.project_id = project_id
         self.profile = profile
         self.require_approval = require_approval
         self.max_iterations = 10
+        self.allowed_dirs = [Path(d).resolve() for d in (allowed_dirs or []) if Path(d).is_dir()]
 
     def _resolve_path(self, path: str) -> Path:
         """Resuelve una ruta relativa al workspace y verifica que no escape.
@@ -190,6 +191,9 @@ class AgentLoop:
         """
         resolved = (self.workspace / path).resolve()
         if resolved != self.workspace and not resolved.is_relative_to(self.workspace):
+            for ad in self.allowed_dirs:
+                if resolved == ad or resolved.is_relative_to(ad):
+                    return resolved
             raise ValueError(f"Ruta fuera del workspace: {path}")
         return resolved
 

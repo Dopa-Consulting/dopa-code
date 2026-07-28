@@ -81,6 +81,7 @@ export default function Sessions() {
               onClick={() => {
                 if (s.workspace_path) localStorage.setItem("dopa-workspace", s.workspace_path);
                 if (s.metadata?.title) localStorage.setItem("dopa-session-title", String(s.metadata.title));
+                localStorage.setItem("dopa-session-id", s.id);
                 navigate("/");
               }}
               className="rounded-lg bg-slate-900 border border-slate-800 p-3 cursor-pointer hover:bg-slate-800/50 transition-colors">

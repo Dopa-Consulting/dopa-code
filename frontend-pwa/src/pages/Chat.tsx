@@ -266,7 +266,8 @@ export default function Chat() {
       role: m.role === "user" ? "user" : "assistant",
       content: m.content
     }));
-    send({ type: "chat", content: prompt, require_approval: requireApproval, history: chatHistory, workspace });
+    const allowedDirs = JSON.parse(localStorage.getItem("dopa-dirs") || "[]");
+    send({ type: "chat", content: prompt, require_approval: requireApproval, history: chatHistory, workspace, allowed_dirs: allowedDirs });
     setInput("");
   }, [input, send, subscribe]);
 
@@ -305,7 +306,7 @@ export default function Chat() {
         <span className="text-xs text-slate-600">ws</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-2">
+      <DirsAdicionales />      <div className="flex-1 overflow-y-auto space-y-2">
         {messages.map((m) => (
           <div key={m.id} className={`border-l-2 rounded-r-lg p-3 ${
             m.role === "intl" ? "border-amber-500 bg-amber-500/5" :
@@ -387,5 +388,37 @@ export default function Chat() {
         <div className="text-xs text-slate-500 text-center mt-1 animate-pulse">Inti esta pensando...</div>
       )}
     </div>
+  );
+}
+
+function DirsAdicionales() {
+  const [dirs, setDirs] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("dopa-dirs") || "[]"); } catch { return []; }
+  });
+  const [dirInput, setDirInput] = useState("");
+  const add = () => {
+    if (dirInput && !dirs.includes(dirInput)) {
+      const next = [...dirs, dirInput];
+      setDirs(next);
+      localStorage.setItem("dopa-dirs", JSON.stringify(next));
+      setDirInput("");
+    }
+  };
+  return (
+    <details className="text-xs mb-2">
+      <summary className="cursor-pointer text-slate-500 hover:text-slate-400">Dirs permitidos ({dirs.length})</summary>
+      <div className="flex gap-1 mt-1">
+        <input value={dirInput} onChange={e => setDirInput(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
+          placeholder="D:\otra\carpeta"
+          className="flex-1 rounded bg-slate-800 border border-slate-700 px-2 py-0.5 text-xs text-slate-400 font-mono placeholder-slate-600" />
+        <button onClick={add} className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:bg-slate-700">+</button>
+      </div>
+      {dirs.map(d => (
+        <div key={d} className="flex items-center gap-1 mt-1">
+          <span className="text-xs text-slate-500 font-mono truncate flex-1">{d}</span>
+          <button onClick={() => { const n = dirs.filter(x => x !== d); setDirs(n); localStorage.setItem("dopa-dirs", JSON.stringify(n)); }} className="text-xs text-slate-600 hover:text-red-400">x</button>
+        </div>
+      ))}
+    </details>
   );
 }
