@@ -1,0 +1,40 @@
+# === Memoria de Inti (NUNCA subir — contiene datos personales, IPs, perfiles) ===
+dopa_code.db
+dopa_code.db-shm
+dopa_code.db-wal
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# === Secretos ===
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# === Perfiles / datos privados del usuario ===
+*-profile.md
+private/
+memory_dumps/
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+venv/
+.venv/
+env/
+
+# === Build ===
+build/
+dist/
+*.spec
+
+# === Generados ===
+*.png
+!landing/**/*.png

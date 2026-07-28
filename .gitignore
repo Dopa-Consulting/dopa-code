@@ -55,4 +55,9 @@ logs/
 *.exe
 !.spec
 !install.ps1
-/docs/jose-profile.md
+
+# === Docs internos (NO al repo público — auditorías, briefs, historial de jobs) ===
+docs/
+*-profile.md
+inti_selftest.png
+est.md
