@@ -20,9 +20,12 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     groq_api_key: str = ""
 
-    architect_model: str = "anthropic/claude-opus-4-8"
-    executor_model: str = "deepseek/deepseek-chat"
-    qa_model: str = "antigravity"
+    # Slugs verificados contra el catálogo vivo de OpenRouter (2026-07). Los
+    # anteriores ("anthropic/claude-opus-4-8", "deepseek/deepseek-chat",
+    # "antigravity") NO existían → el loop erraba/caía al fallback.
+    architect_model: str = "anthropic/claude-opus-4.8-20260528"
+    executor_model: str = "anthropic/claude-opus-4.8-20260528"
+    qa_model: str = "anthropic/claude-opus-4.8-20260528"
 
     easypanel_deploy_token: str = ""
     easypanel_endpoint: str = "https://easypanel.io"
