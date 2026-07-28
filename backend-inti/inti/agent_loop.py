@@ -145,6 +145,26 @@ TOOL_SCHEMAS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_fetch",
+            "description": (
+                "Descarga una URL de internet y devuelve su contenido en texto "
+                "(HTML convertido a texto plano; JSON/texto tal cual). Úsala para "
+                "leer documentación viva, validar catálogos de APIs (p.ej. los "
+                "modelos de OpenRouter en https://openrouter.ai/api/v1/models), o "
+                "consultar cualquier recurso web."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL completa (https://...) a descargar"},
+                },
+                "required": ["url"]
+            }
+        }
+    },
 ]
 
 # Tools que streamean su propio progreso (NO deben ser envueltas por el loop)
@@ -264,6 +284,9 @@ class AgentLoop:
 
             elif name == "generate_image":
                 return await self._generate_image(args, emit)
+
+            elif name == "web_fetch":
+                return await self._web_fetch(args)
 
             else:
                 return f"Error: herramienta desconocida: {name}"
@@ -444,6 +467,40 @@ class AgentLoop:
         if diff_text:
             summary += "\n\nDiff:\n" + diff_text[:3000]
         return summary
+
+    async def _web_fetch(self, args: dict) -> str:
+        """Descarga una URL y devuelve su contenido en texto (HTML → texto plano)."""
+        import re
+        import httpx
+
+        url = (args.get("url") or "").strip()
+        if not url.startswith(("http://", "https://")):
+            return "Error: URL inválida (debe empezar con http:// o https://)."
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                resp = await client.get(url, headers={"User-Agent": "DopaCode-Inti/1.0"})
+        except httpx.TimeoutException:
+            return "Error: la descarga excedió el tiempo límite (30s)."
+        except Exception as e:
+            return f"Error descargando {url}: {type(e).__name__}: {e}"
+
+        if resp.status_code >= 400:
+            return f"Error HTTP {resp.status_code} al descargar {url}."
+
+        ctype = resp.headers.get("content-type", "")
+        body = resp.text
+
+        # JSON o texto plano: tal cual (truncado).
+        if "json" in ctype or "text/plain" in ctype:
+            return body[:8000]
+
+        # HTML → texto plano básico (quita script/style + tags).
+        html = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", body)
+        text = re.sub(r"(?s)<[^>]+>", " ", html)
+        text = re.sub(r"&nbsp;", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:8000] if text else f"(sin contenido de texto en {url})"
 
     async def run(
         self,

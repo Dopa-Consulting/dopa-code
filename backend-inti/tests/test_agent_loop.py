@@ -641,3 +641,44 @@ async def test_generate_image_guarda_png(tmp_workspace, monkeypatch):
     assert "portada.png" in result
     assert any(e["event_type"] == "step.start" for e in events)
     assert any(e["event_type"] == "step.stop" for e in events)
+
+
+# ─────────────────────────────── web_fetch ───────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_web_fetch_html_a_texto(tmp_workspace, monkeypatch):
+    """web_fetch descarga una URL y convierte HTML a texto plano (quita script/tags)."""
+    import httpx
+    from inti.agent_loop import AgentLoop
+
+    class FakeResp:
+        status_code = 200
+        headers = {"content-type": "text/html"}
+        text = ("<html><head><style>.x{color:red}</style></head><body>"
+                "<h1>Hola</h1><script>maligno()</script><p>Mundo</p></body></html>")
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, *a, **k):
+            return FakeResp()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    loop = AgentLoop(workspace=tmp_workspace)
+    result = await loop._web_fetch({"url": "https://example.com"})
+
+    assert "Hola" in result
+    assert "Mundo" in result
+    assert "maligno()" not in result  # el <script> se removió
+    assert "<h1>" not in result       # los tags se removieron
+    # URL inválida
+    bad = await loop._web_fetch({"url": "no-es-url"})
+    assert "inválida" in bad
