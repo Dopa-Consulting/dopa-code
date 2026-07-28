@@ -55,3 +55,4 @@ logs/
 *.exe
 !.spec
 !install.ps1
+/docs/jose-profile.md
