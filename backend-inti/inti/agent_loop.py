@@ -831,6 +831,8 @@ class AgentLoop:
             ["git", "diff", "--cached"],
             cwd=ws, capture_output=True, text=True,
         ).stdout
+        # Des-staging para que git status siga mostrando cambios (pestana Cambios)
+        subprocess.run(["git", "reset", "HEAD"], cwd=ws, capture_output=True, text=True)
         if not diff.strip():
             return None  # nada que aprobar
 

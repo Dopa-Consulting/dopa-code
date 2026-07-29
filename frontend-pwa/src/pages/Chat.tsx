@@ -130,6 +130,27 @@ export default function Chat() {
 
       // Stream de actividad: una tarjeta por herramienta con su resultado.
       // (Antes el resultado —step.delta— se tiraba y solo se veía "Ejecutando...".)
+      if (et === "session_created") {
+        const sid = (e.payload as Record<string,unknown>)?.session_id as string;
+        if (sid) { localStorage.setItem("dopa-session-id", sid); }
+        return;
+      }
+      if (et === "chat_history") {
+        const historyMsgs = (e.payload as Record<string,unknown>)?.messages as Array<{role:string,content:string}> | undefined;
+        if (historyMsgs && historyMsgs.length > 0 && messages.length <= 1) {
+          const loaded: Message[] = [WELCOME];
+          for (const hm of historyMsgs) {
+            loaded.push({
+              id: crypto.randomUUID(),
+              role: hm.role === "user" ? "user" : "intl",
+              content: hm.content,
+              timestamp: new Date().toISOString(),
+            });
+          }
+          setMessages(loaded);
+        }
+        return;
+      }
       if (et === "step.start") {
         const d = (e.data || e.payload || {}) as Record<string,unknown>;
         const tool = (d.tool as string) || (d.step_type as string) || "";
@@ -267,14 +288,15 @@ export default function Chat() {
       content: m.content
     }));
     const allowedDirs = JSON.parse(localStorage.getItem("dopa-dirs") || "[]");
-    send({ type: "chat", content: prompt, require_approval: requireApproval, history: chatHistory, workspace, allowed_dirs: allowedDirs });
+    const sessionId = localStorage.getItem("dopa-session-id") || "";
+    send({ type: "chat", content: prompt, require_approval: requireApproval, history: chatHistory, workspace, allowed_dirs: allowedDirs, session_id: sessionId });
     setInput("");
   }, [input, send, subscribe]);
 
   return (
     <div className="flex flex-col h-[calc(100dvh-120px)]">
       <div className="flex items-center justify-between mb-3">
-        <button onClick={() => { setMessages([WELCOME]); setClickedJobs(new Set()); localStorage.removeItem("dopa-chat"); send({ type: "chat", content: "", new_session: true }); }}
+        <button onClick={() => { setMessages([WELCOME]); setClickedJobs(new Set()); localStorage.removeItem("dopa-chat"); localStorage.removeItem("dopa-session-id"); send({ type: "chat", content: "", new_session: true }); }}
           className="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
           title="Nuevo chat">
           + Nuevo

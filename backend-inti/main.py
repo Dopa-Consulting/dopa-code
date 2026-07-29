@@ -129,8 +129,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
                 continue
 
-            # Auto-crear sesion por conexion (no global)
-            if not session_id:
+            # Usar session_id del cliente (persiste entre dispositivos con mismo token)
+            client_session_id = data.get("session_id", "")
+            if client_session_id:
+                session_id = client_session_id
+            elif not session_id:
                 from inti.orchestrator import orchestrator
                 role = "builder" if content and content.lower().split()[0] in ["crea","genera","construye","hace","diseña"] else "architect"
                 s = orchestrator.create_session(role=role, workspace_path=workspace)
@@ -139,6 +142,29 @@ async def websocket_endpoint(websocket: WebSocket):
                     "event_type": "session_created",
                     "payload": {"session_id": session_id, "workspace": workspace}
                 })
+
+            # Cargar historial persistente de la DB para esta sesion
+            if session_id and not history:
+                try:
+                    from inti.database import async_session as a_s
+                    from sqlalchemy import select
+                    from inti.models.conversation_message import ConversationMessage
+                    async with a_s() as db:
+                        result = await db.execute(
+                            select(ConversationMessage)
+                            .where(ConversationMessage.session_id == session_id)
+                            .order_by(ConversationMessage.created_at.asc())
+                            .limit(50)
+                        )
+                        db_msgs = result.scalars().all()
+                        history = [{"role": m.role, "content": m.content} for m in db_msgs]
+                        if history:
+                            await websocket.send_json({
+                                "event_type": "chat_history",
+                                "payload": {"messages": history, "session_id": session_id}
+                            })
+                except Exception:
+                    pass
 
             from inti.agent_loop import AgentLoop
 
