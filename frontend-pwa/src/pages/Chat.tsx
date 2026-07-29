@@ -327,7 +327,7 @@ export default function Chat() {
             </div>
             {m.kind === "tool" ? (
               <details className="text-xs">
-                <summary className="cursor-pointer select-none text-slate-400 hover:text-slate-200">
+                <summary className="cursor-pointer text-slate-400 hover:text-slate-200">
                   <span>{TOOL_META[m.tool || ""]?.icon || "🔧"}</span>{" "}
                   <span className="text-slate-300">{TOOL_META[m.tool || ""]?.verb || m.tool}</span>
                   {m.arg && <span className="font-mono text-cyan-300"> {m.arg}</span>}
