@@ -67,6 +67,7 @@ interface Message {
   kind?: "tool";
   tool?: string;
   arg?: string;
+  thinking?: boolean;
 }
 
 // Etiqueta amigable por herramienta para el stream de actividad.
@@ -102,7 +103,6 @@ export default function Chat() {
   const { connected, subscribe, send } = useWebSocket(WS_URL);
   const [messages, setMessages] = useState<Message[]>(loadMsgs);
   const [input, setInput] = useState("");
-  const [thinking, setThinking] = useState(false);
   const [clickedJobs, setClickedJobs] = useState<Set<string>>(new Set());
   const [workspace, setWorkspace] = useState(() => localStorage.getItem("dopa-workspace") || "");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -151,6 +151,9 @@ export default function Chat() {
         }
         return;
       }
+      if (et === "step.start" || et === "chat_response" || et === "error") {
+        setMessages((prev) => prev.filter((m) => !m.thinking));
+      }
       if (et === "step.start") {
         const d = (e.data || e.payload || {}) as Record<string,unknown>;
         const tool = (d.tool as string) || (d.step_type as string) || "";
@@ -182,7 +185,6 @@ export default function Chat() {
       if (["interaction.created","interaction.status_update","interaction.completed","done"].includes(et)) return;
 
       if (et === "chat_response") {
-        setThinking(false);
         const p = (e.payload || {}) as Record<string,unknown>;
         const jid = (p.job_id as string) || (e.job_id as string) || "";
         const content = (p.content as string) || "Sin respuesta";
@@ -198,7 +200,6 @@ export default function Chat() {
         return;
       }
       if (et === "DiffReadyForApproval") {
-        setThinking(false);
         const p = (e.payload || {}) as Record<string,unknown>;
         const jid = (p.job_id as string) || (e.job_id as string) || "";
         const mid = crypto.randomUUID();
@@ -282,7 +283,8 @@ export default function Chat() {
     }
 
     setMessages((prev) => [...prev, msg]);
-    setThinking(true);
+    const thinkingId = crypto.randomUUID();
+    setMessages((prev) => [...prev, { id: thinkingId, role: "intl", content: "", timestamp: new Date().toISOString(), thinking: true }]);
     const chatHistory = messages.slice(-10).map(m => ({
       role: m.role === "user" ? "user" : "assistant",
       content: m.content
@@ -347,7 +349,12 @@ export default function Chat() {
                 📋
               </button>
             </div>
-            {m.kind === "tool" ? (
+            {m.thinking ? (
+              <div className="flex items-center gap-2 text-sm text-amber-400 animate-pulse">
+                <span className="w-2 h-2 bg-amber-400 rounded-full inline-block" style={{ animation: "pulse 1s infinite" }} />
+                Inti esta pensando...
+              </div>
+            ) : m.kind === "tool" ? (
               <details className="text-xs">
                 <summary className="cursor-pointer text-slate-400 hover:text-slate-200">
                   <span>{TOOL_META[m.tool || ""]?.icon || "🔧"}</span>{" "}
@@ -406,9 +413,6 @@ export default function Chat() {
           Send
         </button>
       </div>
-      {thinking && (
-        <div className="text-xs text-slate-500 text-center mt-1 animate-pulse">Inti esta pensando...</div>
-      )}
     </div>
   );
 }
