@@ -601,7 +601,7 @@ class AgentLoop:
                 self.project_id, self.profile or "general", limit=5
             )
             if mem and "- " in mem and "[DUMMY]" not in mem:
-                system_content = SYSTEM_PROMPT + "\n\n" + mem
+                system_content = system_content + "\n\n" + mem
         except Exception:
             pass
 
