@@ -66,3 +66,6 @@ docs/
 *-profile.md
 inti_selftest.png
 est.md
+
+# Session persistence
+sessions.json
