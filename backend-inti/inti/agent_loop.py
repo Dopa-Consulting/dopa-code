@@ -260,6 +260,9 @@ class AgentLoop:
         try:
             if name == "read_file":
                 path = self._resolve_path(args["path"])
+                if path.is_dir():
+                    items = sorted(p.name for p in path.iterdir())
+                    return f"'{args['path']}' es un directorio, no un archivo. Contenido:\n" + ("\n".join(items) if items else "(directorio vacío)")
                 if not path.is_file():
                     if "schemas" in args["path"] or "tools/" in args["path"]:
                         return "Error: no existe tools/schemas.py. Las tools estan en inti/agent_loop.py (TOOL_SCHEMAS). Usa read_file con path=ini/agent_loop.py."
@@ -678,6 +681,10 @@ class AgentLoop:
                         return
                 # Sin checkpoint → chat_response normal
                 content = resp.get("content", "") or ""
+                # Limpiar XML/HTML de tool-calls que el LLM incrusta en el texto
+                content = re.sub(r"<tool_calls>[\s\S]*?</tool_calls>", "", content)
+                content = re.sub(r"<(list_dir|read_file|write_file|run_command|git_diff|run_opencode|web_fetch|save_memory|recall_memory|generate_image)\b[^>]*\s*/>", "", content)
+                content = content.strip()
                 # Si el contenido es puro JSON (el LLM intento tool-calling por texto), limpiarlo
                 if content.strip().startswith("```json"):
                     content = content.replace("```json", "").replace("```", "").strip()
