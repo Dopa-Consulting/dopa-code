@@ -31,9 +31,8 @@ class Settings(BaseSettings):
     executor_model: str = "deepseek-v4-flash"
     qa_model: str = "anthropic/claude-sonnet-5"
 
-    # OpenRouter (con prefijo deepseek/) funciona. Directo no.
-    loop_model: str = "deepseek/deepseek-chat"
-    heavy_model: str = "deepseek/deepseek-chat"
+    loop_model: str = "deepseek-v4-pro"
+    heavy_model: str = "anthropic/claude-sonnet-5"
 
     easypanel_deploy_token: str = ""
     easypanel_endpoint: str = "https://easypanel.io"

@@ -605,25 +605,7 @@ class AgentLoop:
             {"role": "system", "content": system_content},
             *(history or []),
             {"role": "user", "content": user_message},
-    {
-        "type": "function",
-        "function": {
-            "name": "save_memory",
-            "description": (
-                "Guarda informacion en la memoria del proyecto (aprendizajes, "
-                "preferencias, datos clave). Usa recall_memory para recuperarla."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "key": {"type": "string", "description": "Clave para guardar (ej: 'preferencia_colores')"},
-                    "value": {"type": "string", "description": "Valor a guardar"},
-                },
-                "required": ["key", "value"]
-            }
-        }
-    },
-]
+        ]
 
         previous_tool_calls: set[str] = set()  # Guard contra repeticion
 
