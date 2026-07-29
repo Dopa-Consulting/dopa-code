@@ -15,8 +15,12 @@ export default function useWebSocket(url: string) {
   const [lastEvent, setLastEvent] = useState<WsEvent | null>(null);
   const listenersRef = useRef<Map<string, Set<(e: WsEvent) => void>>>(new Map());
 
-  const connect = useCallback(() => {
+    const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    if (location.host.includes("ngrok")) {
+      document.cookie = "ngrok-skip-browser-warning=1; path=/; max-age=86400";
+    }
 
     const ws = new WebSocket(url);
     wsRef.current = ws;
