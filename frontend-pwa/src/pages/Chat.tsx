@@ -68,6 +68,7 @@ interface Message {
   tool?: string;
   arg?: string;
   thinking?: boolean;
+  streaming?: boolean;
 }
 
 // Etiqueta amigable por herramienta para el stream de actividad.
@@ -163,6 +164,18 @@ export default function Chat() {
         });
         return;
       }
+      if (et === "stream.token") {
+        const text = ((e.data || e.payload || {}) as Record<string,unknown>).text as string || "";
+        setMessages((prev) => {
+          const filtered = prev.filter((m) => !m.thinking);
+          const last = filtered[filtered.length - 1];
+          if (last && last.streaming) {
+            return [...filtered.slice(0, -1), { ...last, content: last.content + text }];
+          }
+          return [...filtered, { id: crypto.randomUUID(), role: "intl", content: text, timestamp: new Date().toISOString(), streaming: true }];
+        });
+        return;
+      }
       if (et === "step.start") {
         const d = (e.data || e.payload || {}) as Record<string,unknown>;
         const tool = (d.tool as string) || (d.step_type as string) || "";
@@ -200,12 +213,19 @@ export default function Chat() {
         // El card con diff + approve/reject lo renderiza DiffReadyForApproval; acá
         // evitamos duplicar el texto "Propuse cambios".
         if (content.includes("Propuse cambios")) return;
-        setMessages((prev) => [...prev, {
-          id: crypto.randomUUID(), role: "intl",
-          content,
-          timestamp: (e.timestamp as string) || new Date().toISOString(),
-          jobId: jid,
-        }]);
+        setMessages((prev) => {
+          // Si hay un mensaje en streaming, finalizarlo en vez de duplicar
+          const hasStreaming = prev.some((m) => m.streaming);
+          if (hasStreaming) {
+            return prev.map((m) => m.streaming ? { ...m, streaming: false, content: content || m.content } : m);
+          }
+          return [...prev, {
+            id: crypto.randomUUID(), role: "intl",
+            content,
+            timestamp: (e.timestamp as string) || new Date().toISOString(),
+            jobId: jid,
+          }];
+        });
         return;
       }
       if (et === "DiffReadyForApproval") {
@@ -364,6 +384,8 @@ export default function Chat() {
                 Inti esta pensando...
                 {m.content && <span className="text-xs text-slate-600">{m.content}</span>}
               </div>
+            ) : m.streaming ? (
+              <div className="text-sm text-slate-300">{m.content}<span className="inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse align-middle" /></div>
             ) : m.kind === "tool" ? (
               <details className="text-xs">
                 <summary className="cursor-pointer text-slate-400 hover:text-slate-200">

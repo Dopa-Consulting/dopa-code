@@ -236,7 +236,7 @@ class AgentLoop:
                         return chunk
                     if "token" in chunk:
                         await emit({
-                            "event_type": "step.delta",
+                            "event_type": "stream.token",
                             "data": {"text": chunk["token"]},
                         })
                     if "content" in chunk:
@@ -249,7 +249,7 @@ class AgentLoop:
                         return chunk
                     if "token" in chunk:
                         await emit({
-                            "event_type": "step.delta",
+                            "event_type": "stream.token",
                             "data": {"text": chunk["token"]},
                         })
                     if "content" in chunk:
