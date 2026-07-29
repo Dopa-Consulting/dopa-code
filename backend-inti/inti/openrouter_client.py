@@ -628,7 +628,6 @@ class MultiProviderClient:
                 }
                 if tools:
                     payload["tools"] = tools
-                    payload["tool_choice"] = "auto"
                 resp = await client.post(
                     endpoint,
                     headers={

@@ -31,7 +31,11 @@ class Settings(BaseSettings):
     executor_model: str = "deepseek-v4-flash"
     qa_model: str = "anthropic/claude-sonnet-5"
 
-    loop_model: str = "deepseek-v4-flash"
+    # Modelo del loop de Inti = deepseek-v4-pro (flagship DeepSeek, el que usa Hermes):
+    # barato Y con razonamiento real. v4-FLASH (el tier bajo) flaqueaba en tareas
+    # abiertas — exploraba sin leer archivos y devolvía vacío ("Sin respuesta").
+    # Directo (sin prefijo deepseek/). Override: DOPA_LOOP_MODEL.
+    loop_model: str = "deepseek-v4-pro"
     heavy_model: str = "anthropic/claude-sonnet-5"
 
     easypanel_deploy_token: str = ""

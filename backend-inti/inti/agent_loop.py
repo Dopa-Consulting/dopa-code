@@ -10,23 +10,30 @@ from inti.openrouter_client import openrouter
 from inti.config import settings
 from inti.guardrails import guardrail_engine
 
-SYSTEM_PROMPT = """Tu nombre es Inti. Eres el agente andino de Dopa Code, un entorno de desarrollo agentico Local-First.
+SYSTEM_PROMPT = """Tu nombre es Inti. Eres el agente de código de Dopa Code, un entorno de desarrollo agéntico Local-First. Ejecutas, no describes intenciones: haces. Español neutro LATAM (tú, nunca vos), primera persona como Inti.
 
-Eres un agente que DEBE ejecutar herramientas para cumplir las tareas. NO eres un chatbot. CADA mensaje del usuario que empiece con un verbo de accion (crea, construye, genera, escribe, modifica, etc.) DEBE resultar en una llamada a herramienta. JAMAS respondas solo con texto a un comando de accion.
+## Cómo trabajas (lo más importante)
+Eres un agente de tool-calling: observas → actúas → observas, hasta terminar. NO eres un chatbot.
+- Ante un comando de acción (crea, escribe, modifica, arregla, analiza, diagnostica…) SIEMPRE usas herramientas. Jamás respondas solo con texto a un comando de acción.
+- Para ANALIZAR o DIAGNOSTICAR: LEE los archivos relevantes con read_file (usa list_dir para orientarte), razona sobre su contenido, y ENTREGA un análisis concreto en texto. Listar directorios NO es analizar — no te quedes explorando; tras reunir contexto suficiente SIEMPRE das tu conclusión.
+- Sé eficiente: lee los archivos que importan, no explores sin rumbo.
+- CIERRA el loop: cuando termines, responde en TEXTO con el resultado o el análisis. NUNCA termines sin respuesta ni con contenido vacío.
+- No pidas confirmación — usa las herramientas directamente.
 
-Tienes estas herramientas:
-- read_file, write_file, list_dir, run_command, git_diff → ediciones precisas
-- run_opencode(task) → tareas grandes multi-archivo
-- recall_memory → consultar skills y lecciones previas
+## Tus herramientas
+- read_file, write_file, list_dir, git_diff — leer/editar código y ver cambios
+- run_command — comandos de shell del sistema
+- run_opencode(task) — delegar tareas grandes multi-archivo
+- recall_memory — skills y lecciones previas · web_fetch — leer webs · generate_image — imágenes
 
-REGLAS:
-1. SIEMPRE usa herramientas para comandos de accion. NUNCA respondas solo con texto.
-2. Para tareas grandes: run_opencode. Para ediciones puntuales: write_file.
-3. Observa el resultado antes del siguiente paso.
-4. Solo responde con texto cuando la tarea este COMPLETA.
-5. NO pidas confirmacion — USA las herramientas directamente.
-6. Responde en español, en primera persona como Inti.
-7. Si no sabes que hacer, usa recall_memory o preguntame.
+## Entorno (IMPORTANTE — NO es WSL)
+Corres en el host de Dopa Code (Windows en local, Linux en Contabo). run_command usa el shell del sistema, que NO siempre tiene comandos Unix. Para inspeccionar archivos PREFIERE read_file/list_dir en vez de shell (grep, cat, sed, ls pueden no existir o diferir según el SO). Si usas shell, comandos simples; verifica el SO si dudas.
+
+## Contexto Dopa
+Ecosistema de José Castañeda: DopaCRM (ERP/POS/facturación SUNAT, Node+React), Dopa Commerce (storefront Payload+Next), Dopa Code (tú). Claude = arquitecto/auditor; Hermes = ejecución; tú = agente de código Dopa-nativo con memoria + skills de dominio.
+
+## Diseño (si generas UI)
+Clean Solid dark (bg #0B0E11, texto #E2E8F0), gradiente 90° #00E9D9 → #6900FF (texto blanco sobre gradiente), tipografía Geist. Sin glassmorphism, sin emojis, sin colores hardcodeados (CSS vars). NUNCA uses sed en TSX — reescribe con write_file.
 """
 
 TOOL_SCHEMAS = [
@@ -201,9 +208,14 @@ class AgentLoop:
             from inti.openrouter_client import multiprovider
             key = multiprovider.providers.get("deepseek") or settings.deepseek_api_key
             if key:
-                resp = await multiprovider.chat("deepseek", self.model, messages, 8000, tools=tools)
-                if "error" not in resp:
+                resp = await multiprovider.chat("deepseek", self.model, messages, 8000, tools=(tools if tools else None))
+                if "error" not in resp and resp.get("content"):
                     return resp
+                # Si DeepSeek devuelve vacio con tools, reintentar sin tools
+                if "error" not in resp:
+                    resp2 = await multiprovider.chat("deepseek", self.model, messages, 8000)
+                    if "error" not in resp2 and resp2.get("content"):
+                        return resp2
         # Fallback a OpenRouter
         return await openrouter.chat(self.model, messages, tools=tools)
         """Resuelve una ruta relativa al workspace y verifica que no escape.
@@ -679,12 +691,19 @@ class AgentLoop:
                         })
                         return
                 # Sin checkpoint → chat_response normal
-                content = resp.get("content", "")
+                content = resp.get("content", "") or ""
                 # Si el contenido es puro JSON (el LLM intento tool-calling por texto), limpiarlo
                 if content.strip().startswith("```json"):
                     content = content.replace("```json", "").replace("```", "").strip()
                     if len(content) < 20:
                         content = "Procesando tu solicitud. Intentemos algo mas especifico."
+                # El modelo terminó con contenido VACÍO (deepseek suele hacerlo tras
+                # explorar): si ya investigó, forzar la síntesis en vez de "Sin respuesta".
+                if not content.strip():
+                    if previous_tool_calls:
+                        content = await self._force_final_answer(messages)
+                    else:
+                        content = "No generé una respuesta. ¿Puedes reformular la tarea o darme más detalle?"
                 await emit({
                     "event_type": "chat_response",
                     "payload": {
@@ -748,17 +767,36 @@ class AgentLoop:
                     "content": result,
                 })
 
+        # Alcanzó max_iterations sin que el modelo cerrara: en vez de rendirse y
+        # tirar todo lo investigado (gasta tokens sin entregar), forzar una
+        # síntesis final SIN herramientas con lo que ya reunió.
+        content = await self._force_final_answer(messages)
         await emit({
             "event_type": "chat_response",
-            "payload": {
-                "content": (
-                    f"He ejecutado {self.max_iterations} pasos sin completar la tarea. "
-                    "Probablemente me falte contexto o una herramienta. "
-                    "Puedes darme mas detalles o instrucciones mas especificas."
-                ),
-                "model": self.model,
-            },
+            "payload": {"content": content, "model": self.model},
         })
+
+    async def _force_final_answer(self, messages: list[dict]) -> str:
+        """Fuerza una respuesta final del modelo SIN herramientas, para no tirar el
+        trabajo cuando exploró pero no cerró (contenido vacío o max_iterations).
+        Convierte 'gasté tokens sin entregar' en una respuesta real con lo reunido."""
+        nudge = messages + [{
+            "role": "user",
+            "content": (
+                "Ya reuniste suficiente contexto con las herramientas. Da AHORA tu "
+                "respuesta o análisis final EN TEXTO, con lo que tienes. No uses más "
+                "herramientas."
+            ),
+        }]
+        try:
+            resp = await self._chat(nudge, tools=None)
+            content = (resp.get("content") or "").strip()
+        except Exception:
+            content = ""
+        return content or (
+            "Reuní contexto pero no logré sintetizar una respuesta. Dame una "
+            "instrucción más específica y lo intento de nuevo."
+        )
 
     async def _create_simple_checkpoint(self, user_message: str, response: str, emit: Callable[[dict], Awaitable[None]]) -> str | None:
         """Crea un Job simple sin diff (cuando no hubo cambios en el working tree)."""
