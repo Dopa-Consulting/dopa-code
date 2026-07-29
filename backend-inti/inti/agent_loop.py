@@ -212,12 +212,12 @@ class AgentLoop:
             from inti.openrouter_client import multiprovider
             key = multiprovider.providers.get("deepseek") or settings.deepseek_api_key
             if key:
-                resp = await multiprovider.chat("deepseek", self.model, messages, 8000, tools=(tools if tools else None))
+                resp = await multiprovider.chat("deepseek", self.model, messages, 4000, tools=(tools if tools else None))
                 if "error" not in resp and resp.get("content"):
                     return resp
                 # Si DeepSeek devuelve vacio con tools, reintentar sin tools
                 if "error" not in resp:
-                    resp2 = await multiprovider.chat("deepseek", self.model, messages, 8000)
+                    resp2 = await multiprovider.chat("deepseek", self.model, messages, 4000)
                     if "error" not in resp2 and resp2.get("content"):
                         return resp2
         # Fallback a OpenRouter
@@ -617,14 +617,20 @@ class AgentLoop:
         previous_tool_calls: set[str] = set()  # Guard contra repeticion
 
         for iteration in range(self.max_iterations):
-            # Emitir "pensando" entre pasos (no en el primero, ya lo hace el frontend)
-            if iteration > 0:
-                await emit({
-                    "event_type": "loop.thinking",
-                    "payload": {"iteration": iteration},
-                })
+            # Emitir "pensando" en CADA iteracion para que el usuario sepa que Inti sigue vivo
+            await emit({
+                "event_type": "loop.thinking",
+                "payload": {"iteration": iteration + 1, "max": self.max_iterations},
+            })
             # Routing: DeepSeek directo (sin OpenRouter markup) o OpenRouter
-            resp = await self._chat(messages, TOOL_SCHEMAS)
+            try:
+                resp = await self._chat(messages, TOOL_SCHEMAS)
+            except Exception as chat_err:
+                await emit({
+                    "event_type": "error",
+                    "payload": {"error": f"Error de conexion LLM: {str(chat_err)[:200]}"},
+                })
+                return
 
             # Si OpenRouter falla (sin creditos, billing), intentar con Gemini
             if resp.get("error"):
