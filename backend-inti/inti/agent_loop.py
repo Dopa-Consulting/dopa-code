@@ -195,6 +195,34 @@ class AgentLoop:
         self.max_iterations = settings.max_iterations
         self.allowed_dirs = [Path(d).resolve() for d in (allowed_dirs or []) if Path(d).is_dir()]
 
+    def _parse_xml_tool_calls(self, content: str) -> tuple[list[dict] | None, str]:
+        """Si el LLM responde con <tool_calls><invoke>..., parsear a tool_calls nativos."""
+        import uuid
+        import re as re_xml
+        tool_calls = []
+        # Parse <tool_calls><invoke name="X"><parameter name="Y">val</parameter></invoke></tool_calls>
+        invoke_pattern = re_xml.compile(r'<invoke\s+name="(\w+)"\s*>(.*?)</invoke>', re_xml.DOTALL)
+        param_pattern = re_xml.compile(r'<parameter\s+name="(\w+)"\s*>(.*?)</parameter>', re_xml.DOTALL)
+        clean = content
+        for m in invoke_pattern.finditer(content):
+            name = m.group(1)
+            body = m.group(2)
+            args = {}
+            for pm in param_pattern.finditer(body):
+                args[pm.group(1)] = pm.group(2).strip()
+            tool_calls.append({
+                "id": f"xml_{uuid.uuid4().hex[:8]}",
+                "type": "function",
+                "function": {"name": name, "arguments": json.dumps(args)},
+            })
+        if tool_calls:
+            # Limpiar el XML del contenido
+            clean = re.sub(r"<tool_calls>[\s\S]*?</tool_calls>", "", content)
+            clean = re.sub(r"<(list_dir|read_file|write_file|run_command|git_diff|run_opencode|web_fetch|save_memory|recall_memory|generate_image)\b[^>]*\s*/>", "", clean)
+            clean = clean.strip()
+            return tool_calls, clean
+        return None, content
+
     def _resolve_path(self, path: str) -> Path:
         """Resuelve una ruta relativa al workspace. Permite allowed_dirs."""
         resolved = (self.workspace / path).resolve()
@@ -694,6 +722,12 @@ class AgentLoop:
                 return
 
             tool_calls = resp.get("tool_calls")
+            # Si el modelo devuelve tool calls como texto XML en vez del formato nativo
+            if not tool_calls and resp.get("content"):
+                parsed_tc, clean_content = self._parse_xml_tool_calls(resp["content"])
+                if parsed_tc:
+                    resp["content"] = clean_content
+                    tool_calls = parsed_tc
             if not tool_calls:
                 # LLM terminó.
                 if self.require_approval:
