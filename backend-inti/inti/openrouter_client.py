@@ -616,6 +616,103 @@ class MultiProviderClient:
         else:
             return await self._chat_openai_compat(api_key, endpoint, model, messages, max_tokens)
 
+    async def chat_stream(
+        self, provider: str, model: str, messages: list[dict], max_tokens: int = 4000, tools: list | None = None
+    ):
+        """Streaming chat: yields tokens as they arrive."""
+        api_key = self.providers.get(provider) or getattr(settings, f"{provider}_api_key", "")
+        if not api_key:
+            yield {"error": f"API key for {provider} not configured."}
+            return
+        endpoint = PROVIDER_ENDPOINTS.get(provider)
+        if not endpoint:
+            yield {"error": f"Unknown provider: {provider}"}
+            return
+        if provider in ("deepseek", "openai", "groq"):
+            async for chunk in self._chat_openai_compat_stream(api_key, endpoint, model, messages, max_tokens, tools):
+                yield chunk
+        else:
+            # Non-streaming providers: just return full response
+            resp = await self.chat(provider, model, messages, max_tokens, tools)
+            yield resp
+
+    async def _chat_openai_compat_stream(
+        self, api_key: str, endpoint: str, model: str, messages: list[dict], max_tokens: int, tools: list | None = None
+    ):
+        """Streaming: yield tokens as they arrive from the API."""
+        try:
+            payload: dict = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "stream": True,
+            }
+            if tools:
+                payload["tools"] = tools
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                async with client.stream(
+                    "POST",
+                    endpoint,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                ) as resp:
+                    if resp.status_code != 200:
+                        body = await resp.aread()
+                        yield {"error": f"API error {resp.status_code}", "detail": body.decode()[:500]}
+                        return
+                    collected_content = ""
+                    collected_tool_calls: list[dict] = []
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                        except json.JSONDecodeError:
+                            continue
+                        choice = chunk.get("choices", [{}])[0]
+                        delta = choice.get("delta", {})
+                        content_delta = delta.get("content", "")
+                        tool_delta = delta.get("tool_calls")
+                        finish = choice.get("finish_reason")
+
+                        if content_delta:
+                            collected_content += content_delta
+                            yield {"token": content_delta, "content_so_far": collected_content}
+
+                        if tool_delta:
+                            for td in tool_delta:
+                                idx = td.get("index", 0)
+                                while len(collected_tool_calls) <= idx:
+                                    collected_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                                if td.get("id"):
+                                    collected_tool_calls[idx]["id"] = td["id"]
+                                if td.get("function", {}).get("name"):
+                                    collected_tool_calls[idx]["function"]["name"] = td["function"]["name"]
+                                if td.get("function", {}).get("arguments"):
+                                    collected_tool_calls[idx]["function"]["arguments"] += td["function"]["arguments"]
+
+                        if finish == "stop" or finish == "tool_calls":
+                            usage = chunk.get("usage", {})
+                            yield {
+                                "content": collected_content,
+                                "tool_calls": collected_tool_calls if collected_tool_calls else None,
+                                "finish_reason": finish,
+                                "usage": {
+                                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                                    "completion_tokens": usage.get("completion_tokens", 0),
+                                    "total_tokens": usage.get("total_tokens", 0),
+                                },
+                            }
+                            return
+        except Exception as e:
+            yield {"error": str(e)}
+
     async def _chat_openai_compat(
         self, api_key: str, endpoint: str, model: str, messages: list[dict], max_tokens: int, tools: list | None = None
     ) -> dict:

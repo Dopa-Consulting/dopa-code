@@ -222,6 +222,41 @@ class AgentLoop:
                         return resp2
         # Fallback a OpenRouter
         return await openrouter.chat(self.model, messages, tools=tools)
+
+    async def _chat_stream(self, emit, messages: list[dict], tools: list[dict]) -> dict:
+        """Streaming: emite tokens paso a paso. Devuelve el resultado final."""
+        if "deepseek" in self.model and "deepseek/deepseek" not in self.model:
+            from inti.config import settings
+            from inti.openrouter_client import multiprovider
+            key = multiprovider.providers.get("deepseek") or settings.deepseek_api_key
+            if key:
+                final_resp = {}
+                async for chunk in multiprovider.chat_stream("deepseek", self.model, messages, 4000, tools=(tools if tools else None)):
+                    if "error" in chunk:
+                        return chunk
+                    if "token" in chunk:
+                        await emit({
+                            "event_type": "step.delta",
+                            "data": {"text": chunk["token"]},
+                        })
+                    if "content" in chunk:
+                        final_resp = chunk
+                if final_resp.get("content"):
+                    return final_resp
+                # Retry sin tools
+                async for chunk in multiprovider.chat_stream("deepseek", self.model, messages, 4000):
+                    if "error" in chunk:
+                        return chunk
+                    if "token" in chunk:
+                        await emit({
+                            "event_type": "step.delta",
+                            "data": {"text": chunk["token"]},
+                        })
+                    if "content" in chunk:
+                        final_resp = chunk
+                return final_resp
+        # Fallback no-streaming
+        return await self._chat(messages, tools)
         """Resuelve una ruta relativa al workspace y verifica que no escape.
 
         Usa is_relative_to (no startswith) para que un directorio hermano con
@@ -624,7 +659,7 @@ class AgentLoop:
             })
             # Routing: DeepSeek directo (sin OpenRouter markup) o OpenRouter
             try:
-                resp = await self._chat(messages, TOOL_SCHEMAS)
+                resp = await self._chat_stream(emit, messages, TOOL_SCHEMAS)
             except Exception as chat_err:
                 await emit({
                     "event_type": "error",
