@@ -18,7 +18,7 @@ class AgentSession(Base):
     status: Mapped[str] = mapped_column(String(16), default="idle")
     workspace_path: Mapped[str] = mapped_column(Text, default="")
     current_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    meta_info: Mapped[dict | None] = mapped_column(JSON, nullable=True, name="metadata")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
