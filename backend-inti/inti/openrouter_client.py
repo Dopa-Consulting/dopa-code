@@ -620,7 +620,7 @@ class MultiProviderClient:
         self, api_key: str, endpoint: str, model: str, messages: list[dict], max_tokens: int, tools: list | None = None
     ) -> dict:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 payload: dict = {
                     "model": model,
                     "messages": messages,

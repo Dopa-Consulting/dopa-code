@@ -155,9 +155,11 @@ export default function Chat() {
         setMessages((prev) => prev.filter((m) => !m.thinking));
       }
       if (et === "loop.thinking") {
+        const it = (e.payload as Record<string,unknown>)?.iteration as number || 0;
+        const max = (e.payload as Record<string,unknown>)?.max as number || 20;
         setMessages((prev) => {
-          if (prev.some((m) => m.thinking)) return prev;
-          return [...prev, { id: crypto.randomUUID(), role: "intl", content: "", timestamp: new Date().toISOString(), thinking: true }];
+          if (prev.some((m) => m.thinking)) return prev.map((m) => m.thinking ? { ...m, content: `${it}/${max}` } : m);
+          return [...prev, { id: crypto.randomUUID(), role: "intl", content: `${it}/${max}`, timestamp: new Date().toISOString(), thinking: true }];
         });
         return;
       }
@@ -360,6 +362,7 @@ export default function Chat() {
               <div className="flex items-center gap-2 text-sm text-amber-400 animate-pulse">
                 <span className="w-2 h-2 bg-amber-400 rounded-full inline-block" style={{ animation: "pulse 1s infinite" }} />
                 Inti esta pensando...
+                {m.content && <span className="text-xs text-slate-600">{m.content}</span>}
               </div>
             ) : m.kind === "tool" ? (
               <details className="text-xs">
