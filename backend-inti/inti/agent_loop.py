@@ -181,7 +181,7 @@ class AgentLoop:
         self.project_id = project_id
         self.profile = profile
         self.require_approval = require_approval
-        self.max_iterations = 4
+        self.max_iterations = settings.max_iterations
         self.allowed_dirs = [Path(d).resolve() for d in (allowed_dirs or []) if Path(d).is_dir()]
 
     def _resolve_path(self, path: str) -> Path:
