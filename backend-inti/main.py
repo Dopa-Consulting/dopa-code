@@ -69,14 +69,20 @@ PUBLIC_PATHS = ["/health", "/login", "/favicon.svg", "/manifest.json", "/sw.js",
 
 @app.middleware("http")
 async def auth_middleware(request, call_next):
-    if SKIP_AUTH:
-        return await call_next(request)
     path = request.url.path
+    if SKIP_AUTH:
+        response = await call_next(request)
+        response.set_cookie("ngrok-skip-browser-warning", "1", path="/", samesite="lax", max_age=86400)
+        return response
     if any(path.startswith(p) for p in PUBLIC_PATHS + ["/"]):
-        return await call_next(request)
+        response = await call_next(request)
+        response.set_cookie("ngrok-skip-browser-warning", "1", path="/", samesite="lax", max_age=86400)
+        return response
     token = request.cookies.get("dopa_token")
     if token == settings.access_token:
-        return await call_next(request)
+        response = await call_next(request)
+        response.set_cookie("ngrok-skip-browser-warning", "1", path="/", samesite="lax", max_age=86400)
+        return response
     return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
 

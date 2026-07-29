@@ -18,10 +18,6 @@ export default function useWebSocket(url: string) {
     const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    if (location.host.includes("ngrok")) {
-      document.cookie = "ngrok-skip-browser-warning=1; path=/; max-age=86400";
-    }
-
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
