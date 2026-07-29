@@ -26,6 +26,7 @@ Comunicacion:
 """
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -36,6 +37,8 @@ from typing import Literal
 from inti.config import settings
 
 logger = logging.getLogger("inti.orchestrator")
+
+SESSION_FILE = Path(__file__).parent.parent / "sessions.json"
 
 AgentRole = Literal["architect", "builder", "reviewer", "deployer", "custom"]
 SessionStatus = Literal["idle", "running", "waiting", "completed", "error", "disconnected"]
@@ -106,6 +109,54 @@ class Orchestrator:
     def __init__(self):
         self.sessions: dict[str, AgentSession] = {}
         self.max_concurrent: int = 5
+        self._load_from_file()
+
+    def _persist_to_file(self):
+        """Guarda sesiones a JSON para sobrevivir reinicios del daemon."""
+        try:
+            data = {}
+            for sid, s in self.sessions.items():
+                data[sid] = {
+                    "id": s.id,
+                    "role": s.role,
+                    "model": s.model,
+                    "provider": s.provider,
+                    "status": s.status,
+                    "workspace_path": s.workspace_path,
+                    "current_job_id": s.current_job_id,
+                    "metadata": s.metadata,
+                    "created_at": s.created_at.isoformat() if s.created_at else None,
+                    "last_active_at": s.last_active_at.isoformat() if s.last_active_at else None,
+                }
+            SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(SESSION_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            logger.warning("Failed to persist sessions", exc_info=True)
+
+    def _load_from_file(self):
+        """Carga sesiones desde JSON al iniciar el daemon."""
+        if not SESSION_FILE.exists():
+            return
+        try:
+            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for sid, sdata in data.items():
+                self.sessions[sid] = AgentSession(
+                    id=sdata.get("id", sid),
+                    role=sdata.get("role", "builder"),
+                    model=sdata.get("model", ""),
+                    provider=sdata.get("provider", ""),
+                    status=sdata.get("status", "idle"),
+                    workspace_path=sdata.get("workspace_path", ""),
+                    current_job_id=sdata.get("current_job_id"),
+                    metadata=sdata.get("metadata", {}),
+                    created_at=datetime.fromisoformat(sdata["created_at"]) if sdata.get("created_at") else datetime.now(timezone.utc),
+                    last_active_at=datetime.fromisoformat(sdata["last_active_at"]) if sdata.get("last_active_at") else None,
+                )
+            logger.info(f"Loaded {len(self.sessions)} sessions from {SESSION_FILE}")
+        except Exception:
+            logger.warning("Failed to load sessions", exc_info=True)
 
     def create_session(
         self,
@@ -132,6 +183,7 @@ class Orchestrator:
             session.status = "waiting"
 
         self.sessions[session.id] = session
+        self._persist_to_file()
         logger.info(f"Session created: {session.id} [{role}] model={session.model}")
         return session
 
@@ -159,6 +211,7 @@ class Orchestrator:
         session.current_job_id = job_id
         session.status = "running"
         session.last_active_at = datetime.now(timezone.utc)
+        self._persist_to_file()
         return True
 
     def complete_job(self, session_id: str, success: bool = True) -> bool:
@@ -170,6 +223,7 @@ class Orchestrator:
         session.last_active_at = datetime.now(timezone.utc)
 
         self._promote_waiting()
+        self._persist_to_file()
         return True
 
     def disconnect_session(self, session_id: str) -> bool:
@@ -178,11 +232,13 @@ class Orchestrator:
             return False
         session.status = "disconnected"
         session.current_job_id = None
+        self._persist_to_file()
         return True
 
     def remove_session(self, session_id: str) -> bool:
         if session_id in self.sessions:
             del self.sessions[session_id]
+            self._persist_to_file()
             return True
         return False
 

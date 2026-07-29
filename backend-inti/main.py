@@ -12,7 +12,7 @@ from inti.database import engine, Base
 from inti.models import (  # noqa: F401 - register all models for table creation
     Job, JobStep, Diff, Approval, AuditLog, Event, CiRun, Device,
     ExperienceLesson, SkillDefinition, SkillExecution, ProjectKnowledge,
-    Tenant, PaymentIntegration,
+    Tenant, PaymentIntegration, ConversationMessage, AgentSession,
 )
 
 

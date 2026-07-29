@@ -14,6 +14,8 @@ from inti.models.tenant import Tenant
 from inti.models.payment_integration import PaymentIntegration
 from inti.models.conversation_message import ConversationMessage
 
+from inti.models.agent_session import AgentSession
+
 __all__ = [
     "Job",
     "JobStep",
@@ -29,4 +31,6 @@ __all__ = [
     "ProjectKnowledge",
     "Tenant",
     "PaymentIntegration",
+    "ConversationMessage",
+    "AgentSession",
 ]
