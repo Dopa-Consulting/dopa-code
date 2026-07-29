@@ -11,8 +11,6 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60
 
     dopa_code_dummy: bool = False
-    # Timeout de run_command (segundos). Configurable via DOPA_RUN_COMMAND_TIMEOUT.
-    # 120s por default para no matar builds largos (npm install, pytest, etc.).
     run_command_timeout: int = 120
     openrouter_api_key: str = ""
     antigravity_api_key: str = ""
@@ -23,26 +21,17 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     groq_api_key: str = ""
 
-    # Slugs verificados contra el catálogo vivo de OpenRouter (2026-07). Los
-    # anteriores ("anthropic/claude-opus-4-8", "deepseek/deepseek-chat",
-    # "antigravity") NO existían → el loop erraba/caía al fallback.
-    architect_model: str = "anthropic/claude-opus-4.8-20260528"
-    executor_model: str = "anthropic/claude-opus-4.8-20260528"
-    qa_model: str = "anthropic/claude-opus-4.8-20260528"
+    architect_model: str = "anthropic/claude-sonnet-5"
+    executor_model: str = "deepseek-v4-flash"
+    qa_model: str = "anthropic/claude-sonnet-5"
 
-    # Routing de modelos (Part A del brief cost-routing)
-    loop_model: str = "deepseek/deepseek-chat"   # DeepSeek V4 via OpenRouter (con tool-calling)
-    heavy_model: str = "anthropic/claude-sonnet-5"  # Sonnet 5 via OpenRouter
-    heavy_model: str = "deepseek/deepseek-chat"   # Mismo por ahora
+    loop_model: str = "deepseek-v4-flash"
+    heavy_model: str = "anthropic/claude-sonnet-5"
 
     easypanel_deploy_token: str = ""
     easypanel_endpoint: str = "https://easypanel.io"
-
     access_token: str = "cambiar-en-produccion"
 
-    # extra="ignore": el .env tiene claves con nombres que no matchean campos
-    # (p.ej. DOPA_CODE_DUMMY vs el campo dopa_code_dummy). Sin esto,
-    # pydantic-settings (extra='forbid' por default) crashea el boot del backend.
     model_config = {"env_prefix": "DOPA_", "env_file": ".env", "extra": "ignore"}
 
 
