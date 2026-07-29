@@ -154,6 +154,13 @@ export default function Chat() {
       if (et === "step.start" || et === "chat_response" || et === "error") {
         setMessages((prev) => prev.filter((m) => !m.thinking));
       }
+      if (et === "loop.thinking") {
+        setMessages((prev) => {
+          if (prev.some((m) => m.thinking)) return prev;
+          return [...prev, { id: crypto.randomUUID(), role: "intl", content: "", timestamp: new Date().toISOString(), thinking: true }];
+        });
+        return;
+      }
       if (et === "step.start") {
         const d = (e.data || e.payload || {}) as Record<string,unknown>;
         const tool = (d.tool as string) || (d.step_type as string) || "";

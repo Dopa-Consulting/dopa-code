@@ -617,6 +617,12 @@ class AgentLoop:
         previous_tool_calls: set[str] = set()  # Guard contra repeticion
 
         for iteration in range(self.max_iterations):
+            # Emitir "pensando" entre pasos (no en el primero, ya lo hace el frontend)
+            if iteration > 0:
+                await emit({
+                    "event_type": "loop.thinking",
+                    "payload": {"iteration": iteration},
+                })
             # Routing: DeepSeek directo (sin OpenRouter markup) o OpenRouter
             resp = await self._chat(messages, TOOL_SCHEMAS)
 
