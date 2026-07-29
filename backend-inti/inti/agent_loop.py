@@ -15,10 +15,10 @@ SYSTEM_PROMPT = """Tu nombre es Inti. Eres el agente de código de Dopa Code, un
 ## Cómo trabajas (lo más importante)
 Eres un agente de tool-calling: observas → actúas → observas, hasta terminar.
 - PREGUNTAS CONVERSACIONALES: Si el usuario hace una pregunta simple (Hola, cómo estás, qué modelo usas, qué puedes hacer, cuál es tu nombre…) responde DIRECTAMENTE en texto. NO uses herramientas para preguntas conversacionales.
-- Ante un COMANDO de ACCIÓN (crea, escribe, modifica, arregla, analiza, diagnostica, revisa…) SIEMPRE usas herramientas. Jamás respondas solo con texto a un comando de acción.
-- Para ANALIZAR o DIAGNOSTICAR: LEE los archivos relevantes con read_file (usa list_dir para orientarte), razona sobre su contenido, y ENTREGA un análisis concreto en texto. No te quedes explorando; tras reunir contexto suficiente SIEMPRE das tu conclusión.
-- Sé eficiente: lee los archivos que importan, no explores sin rumbo.
-- CIERRA el loop: cuando termines, responde en TEXTO con el resultado o el análisis. NUNCA termines sin respuesta ni con contenido vacío.
+- Ante un COMANDO de ACCIÓN (crea, escribe, modifica, arregla, analiza, diagnostica, revisa, audita…) SIEMPRE usas herramientas. Jamás respondas solo con texto a un comando de acción.
+- EFICIENCIA: Cuando necesites leer varios archivos, pide TODOS en una sola llamada. No leas uno por uno. Ej: si vas a auditar, pide read_file para los 5-10 archivos clave DE UNA VEZ.
+- Para ANALIZAR o DIAGNOSTICAR: LEE los archivos, razona sobre su contenido, y ENTREGA un análisis concreto. No te quedes explorando; tras reunir contexto suficiente SIEMPRE das tu conclusión.
+- CIERRA el loop: cuando termines, responde en TEXTO con el resultado. NUNCA termines sin respuesta ni con contenido vacío.
 - No pidas confirmación — usa las herramientas directamente.
 
 ## Tus herramientas
@@ -201,8 +201,8 @@ class AgentLoop:
         import re as re_xml
         tool_calls = []
         # Parse <tool_calls><invoke name="X"><parameter name="Y">val</parameter></invoke></tool_calls>
-        invoke_pattern = re_xml.compile(r'<invoke\s+name="(\w+)"\s*>(.*?)</invoke>', re_xml.DOTALL)
-        param_pattern = re_xml.compile(r'<parameter\s+name="(\w+)"\s*>(.*?)</parameter>', re_xml.DOTALL)
+        invoke_pattern = re_xml.compile(r'<invoke\s+name="(\w+)"[^>]*>(.*?)</invoke>', re_xml.DOTALL)
+        param_pattern = re_xml.compile(r'<parameter\s+name="(\w+)"[^>]*>(.*?)</parameter>', re_xml.DOTALL)
         clean = content
         for m in invoke_pattern.finditer(content):
             name = m.group(1)
@@ -793,12 +793,20 @@ class AgentLoop:
                 "tool_calls": tool_calls,
             })
 
+            # Ejecutar tools: read-only en paralelo, write/run en secuencia
+            READ_TOOLS = {"read_file", "list_dir", "git_diff"}
+            read_tasks: list[tuple[int, dict, str, dict]] = []
+            write_tasks: list[tuple[int, dict, str, dict]] = []
+
             for i, tc in enumerate(tool_calls):
                 fn = tc["function"]
                 name = fn["name"]
-                args = json.loads(fn["arguments"] or "{}")
+                try:
+                    args = json.loads(fn["arguments"] or "{}")
+                except (json.JSONDecodeError, TypeError):
+                    args = {}
 
-                # Loop guard: detectar repeticion exacta de tool+args
+                # Loop guard
                 call_key = f"{name}:{json.dumps(args, sort_keys=True)}"
                 if call_key in previous_tool_calls and iteration > 0:
                     await emit({
@@ -811,35 +819,31 @@ class AgentLoop:
                     return
                 previous_tool_calls.add(call_key)
 
-                is_streaming = name in _STREAMING_TOOLS
-
-                if is_streaming:
-                    # La tool maneja su propio framing (step.start/delta/stop)
-                    result = await self.execute_tool(name, args, emit=emit)
+                if name in READ_TOOLS:
+                    read_tasks.append((i, tc, name, args))
                 else:
-                    # Tools locales: el loop emite el framing
-                    await emit({
-                        "event_type": "step.start",
-                        "data": {"tool": name, "args": args},
-                    })
+                    write_tasks.append((i, tc, name, args))
 
-                    result = await self.execute_tool(name, args)
+            async def _run_read(idx: int, tc: dict, name: str, args: dict):
+                await emit({"event_type": "step.start", "data": {"tool": name, "args": args}})
+                result = await self.execute_tool(name, args)
+                await emit({"event_type": "step.delta", "data": {"text": f"🔧 {name} → {result[:800]}"}})
+                await emit({"event_type": "step.stop", "data": {"index": idx}})
+                return (idx, tc, result)
 
-                    await emit({
-                        "event_type": "step.delta",
-                        "data": {"text": f"🔧 {name} → {result[:800]}"},
-                    })
+            # Ejecutar reads en paralelo
+            if read_tasks:
+                results = await asyncio.gather(*[_run_read(i, tc, n, a) for i, tc, n, a in read_tasks])
+                for idx, tc, result in sorted(results, key=lambda x: x[0]):
+                    messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
 
-                    await emit({
-                        "event_type": "step.stop",
-                        "data": {"index": i},
-                    })
-
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc["id"],
-                    "content": result,
-                })
+            # Ejecutar writes/commands en secuencia
+            for idx, tc, name, args in write_tasks:
+                await emit({"event_type": "step.start", "data": {"tool": name, "args": args}})
+                result = await self.execute_tool(name, args)
+                await emit({"event_type": "step.delta", "data": {"text": f"🔧 {name} → {result[:800]}"}})
+                await emit({"event_type": "step.stop", "data": {"index": idx}})
+                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
 
         # Alcanzó max_iterations sin que el modelo cerrara: en vez de rendirse y
         # tirar todo lo investigado (gasta tokens sin entregar), forzar una
