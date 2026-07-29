@@ -649,6 +649,7 @@ class MultiProviderClient:
             }
             if tools:
                 payload["tools"] = tools
+                payload["tool_choice"] = "auto"
             async with httpx.AsyncClient(timeout=90.0) as client:
                 async with client.stream(
                     "POST",
@@ -725,6 +726,7 @@ class MultiProviderClient:
                 }
                 if tools:
                     payload["tools"] = tools
+                    payload["tool_choice"] = "auto"
                 resp = await client.post(
                     endpoint,
                     headers={
