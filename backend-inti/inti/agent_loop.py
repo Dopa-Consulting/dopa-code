@@ -215,13 +215,17 @@ class AgentLoop:
     def _parse_xml_tool_calls(self, content: str) -> tuple[list[dict] | None, str]:
         """Si el LLM responde con <tool_calls><invoke>..., parsear a tool_calls nativos."""
         import uuid
+        import html as html_mod
         import re as re_xml
         tool_calls = []
-        # Parse <tool_calls><invoke name="X"><parameter name="Y">val</parameter></invoke></tool_calls>
-        invoke_pattern = re_xml.compile(r'<invoke\s+name="(\w+)"[^>]*>(.*?)</invoke>', re_xml.DOTALL)
-        param_pattern = re_xml.compile(r'<parameter\s+name="(\w+)"[^>]*>(.*?)</parameter>', re_xml.DOTALL)
-        clean = content
-        for m in invoke_pattern.finditer(content):
+        # Unescape HTML entities que DeepSeek a veces mete
+        unescaped = html_mod.unescape(content)
+        # Parse <tool_calls> o <aze:tool_calls> con opcional namespace prefix
+        ns = r'(?:[\w-]+:)?'  # opcional: aze:, etc.
+        invoke_pattern = re_xml.compile(rf'<{ns}invoke\s+name="(\w+)"[^>]*>(.*?)</{ns}invoke>', re_xml.DOTALL)
+        param_pattern = re_xml.compile(rf'<{ns}parameter\s+name="(\w+)"[^>]*>(.*?)</{ns}parameter>', re_xml.DOTALL)
+        clean = unescaped
+        for m in invoke_pattern.finditer(unescaped):
             name = m.group(1)
             body = m.group(2)
             args = {}
@@ -233,9 +237,9 @@ class AgentLoop:
                 "function": {"name": name, "arguments": json.dumps(args)},
             })
         if tool_calls:
-            # Limpiar el XML del contenido
-            clean = re.sub(r"<tool_calls>[\s\S]*?</tool_calls>", "", content)
-            clean = re.sub(r"<(list_dir|read_file|write_file|run_command|git_diff|run_opencode|web_fetch|save_memory|recall_memory|generate_image)\b[^>]*\s*/>", "", clean)
+            # Limpiar el XML del contenido (con o sin namespace)
+            clean = re.sub(rf"<{ns}tool_calls>[\s\S]*?</{ns}tool_calls>", "", unescaped)
+            clean = re.sub(rf"<{ns}(list_dir|read_file|write_file|run_command|git_diff|run_opencode|web_fetch|save_memory|recall_memory|generate_image)\b[^>]*\s*/>", "", clean)
             clean = clean.strip()
             return tool_calls, clean
         return None, content

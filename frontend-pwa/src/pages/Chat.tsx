@@ -4,9 +4,10 @@ import useWebSocket from "../hooks/useWebSocket";
 const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 
 function renderMd(text: string): string {
+  // No escapar &lt;/&gt; primero — el contenido ya puede venir escapado del backend
   let html = text
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    // Headers (must be before line breaks)
+    .replace(/&(?!amp;|lt;|gt;|quot;|#\d+;|#x[0-9a-fA-F]+;)/g, "&amp;")
+    // Headers
     .replace(/^#### (.+)$/gm, "<h4 class='text-sm font-semibold text-slate-200 mt-3 mb-1'>$1</h4>")
     .replace(/^### (.+)$/gm, "<h3 class='text-base font-semibold text-slate-100 mt-3 mb-1'>$1</h3>")
     .replace(/^## (.+)$/gm, "<h2 class='text-lg font-bold text-white mt-4 mb-2'>$1</h2>")
