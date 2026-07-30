@@ -737,6 +737,12 @@ class AgentLoop:
                 if parsed_tc:
                     resp["content"] = clean_content
                     tool_calls = parsed_tc
+                    # Emitir el texto limpio antes de ejecutar tools (limpia el streaming)
+                    if clean_content:
+                        await emit({
+                            "event_type": "chat_response",
+                            "payload": {"content": clean_content, "model": self.model},
+                        })
             if not tool_calls:
                 # LLM terminó.
                 if self.require_approval:

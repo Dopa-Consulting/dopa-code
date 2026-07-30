@@ -668,6 +668,7 @@ class MultiProviderClient:
                         return
                     collected_content = ""
                     collected_tool_calls: list[dict] = []
+                    suppress_stream = False  # true cuando empieza <tool_calls> XML
                     async for line in resp.aiter_lines():
                         if not line.startswith("data: "):
                             continue
@@ -686,7 +687,10 @@ class MultiProviderClient:
 
                         if content_delta:
                             collected_content += content_delta
-                            yield {"token": content_delta, "content_so_far": collected_content}
+                            if "<tool_calls>" in collected_content or "<invoke" in collected_content:
+                                suppress_stream = True
+                            if not suppress_stream:
+                                yield {"token": content_delta, "content_so_far": collected_content}
 
                         if tool_delta:
                             for td in tool_delta:
