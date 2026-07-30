@@ -649,7 +649,9 @@ class MultiProviderClient:
             }
             if tools:
                 payload["tools"] = tools
-                payload["tool_choice"] = "auto"
+                # DeepSeek ignora tool_choice y alucina herramientas. No forzar.
+                if "deepseek" not in model.lower():
+                    payload["tool_choice"] = "auto"
             async with httpx.AsyncClient(timeout=90.0) as client:
                 async with client.stream(
                     "POST",
@@ -724,7 +726,7 @@ class MultiProviderClient:
                     "messages": messages,
                     "max_tokens": max_tokens,
                 }
-                if tools:
+                if tools and "deepseek" not in model.lower():
                     payload["tools"] = tools
                     payload["tool_choice"] = "auto"
                 resp = await client.post(

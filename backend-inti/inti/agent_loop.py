@@ -22,10 +22,27 @@ Eres un agente de tool-calling: observas → actúas → observas, hasta termina
 - No pidas confirmación — usa las herramientas directamente.
 
 ## Tus herramientas
-- read_file, write_file, list_dir, git_diff — leer/editar código y ver cambios
-- run_command — comandos de shell del sistema
-- run_opencode(task) — delegar tareas grandes multi-archivo
-- recall_memory — skills y lecciones previas · web_fetch — leer webs · generate_image — imágenes
+Para usar varias a la vez, ponlas dentro de <tool_calls>:
+<tool_calls>
+<invoke name="read_file">
+<parameter name="path" string="true">inti/config.py</parameter>
+</invoke>
+<invoke name="run_command">
+<parameter name="command" string="true">git status</parameter>
+</invoke>
+</tool_calls>
+
+Herramientas disponibles:
+- read_file(path) — leer archivo
+- write_file(path, content) — escribir/sobrescribir archivo
+- list_dir(path) — listar directorio
+- run_command(command) — comando shell (NO uses head/tail/grep en Windows, usa PowerShell)
+- git_diff() — ver cambios en git
+- run_opencode(task) — delegar tareas multi-archivo
+- recall_memory(key) — buscar en memoria
+- save_memory(key, value) — guardar en memoria
+- web_fetch(url) — leer pagina web
+- generate_image(prompt) — generar imagen con IA
 
 ## Entorno (IMPORTANTE — NO es WSL)
 Corres en el host de Dopa Code (Windows en local, Linux en Contabo). run_command usa el shell del sistema, que NO siempre tiene comandos Unix. Para inspeccionar archivos PREFIERE read_file/list_dir en vez de shell (grep, cat, sed, ls pueden no existir o diferir según el SO). Si usas shell, comandos simples; verifica el SO si dudas.
@@ -240,10 +257,10 @@ class AgentLoop:
             from inti.openrouter_client import multiprovider
             key = multiprovider.providers.get("deepseek") or settings.deepseek_api_key
             if key:
-                resp = await multiprovider.chat("deepseek", self.model, messages, 4000, tools=(tools if tools else None))
+                # DeepSeek ignora function calling nativo → no enviar tools
+                resp = await multiprovider.chat("deepseek", self.model, messages, 4000)
                 if "error" not in resp and resp.get("content"):
                     return resp
-                # Si DeepSeek devuelve vacio con tools, reintentar sin tools
                 if "error" not in resp:
                     resp2 = await multiprovider.chat("deepseek", self.model, messages, 4000)
                     if "error" not in resp2 and resp2.get("content"):
@@ -259,19 +276,7 @@ class AgentLoop:
             key = multiprovider.providers.get("deepseek") or settings.deepseek_api_key
             if key:
                 final_resp = {}
-                async for chunk in multiprovider.chat_stream("deepseek", self.model, messages, 4000, tools=(tools if tools else None)):
-                    if "error" in chunk:
-                        return chunk
-                    if "token" in chunk:
-                        await emit({
-                            "event_type": "stream.token",
-                            "data": {"text": chunk["token"]},
-                        })
-                    if "content" in chunk:
-                        final_resp = chunk
-                if final_resp.get("content"):
-                    return final_resp
-                # Retry sin tools
+                # DeepSeek ignora function calling → no enviar tools, el prompt las describe
                 async for chunk in multiprovider.chat_stream("deepseek", self.model, messages, 4000):
                     if "error" in chunk:
                         return chunk
