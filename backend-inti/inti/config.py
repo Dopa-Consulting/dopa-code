@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     executor_model: str = "deepseek-v4-flash"
     qa_model: str = "anthropic/claude-sonnet-5"
 
-    loop_model: str = "deepseek-v4-pro"
+    loop_model: str = "deepseek/deepseek-chat"  # Via OpenRouter (como Hermes)
     heavy_model: str = "anthropic/claude-sonnet-5"
 
     easypanel_deploy_token: str = ""
