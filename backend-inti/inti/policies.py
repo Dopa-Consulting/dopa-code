@@ -79,9 +79,29 @@ ActorType = Literal[
 ]
 
 ALLOWED_COMMANDS: dict[str, list[str]] = {
-    "git": ["status", "diff", "checkout", "commit", "push", "branch", "log", "add"],
-    "python": ["-m", "pytest", "-c"],
+    "git": ["status", "diff", "checkout", "commit", "push", "branch", "log", "add", "config"],
+    "python": ["-m", "-c"],
+    "pip": ["install", "list", "freeze"],
     "npm": ["test", "run", "install", "build"],
+    "npx": [],
+    "bun": [],
+    "node": [],
+    "dir": [],
+    "ls": [],
+    "echo": [],
+    "type": [],
+    "cat": [],
+    "mkdir": [],
+    "cd": [],
+    "copy": [],
+    "move": [],
+    "del": [],
+    "rm": [],
+    "where": [],
+    "which": [],
+    "powershell": [],
+    "curl": [],
+    "wget": [],
     "opencode": [],
 }
 

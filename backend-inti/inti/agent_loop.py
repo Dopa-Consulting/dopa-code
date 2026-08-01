@@ -361,10 +361,11 @@ class AgentLoop:
                 return "\n".join(items) if items else "(directorio vacío)"
 
             elif name == "run_command":
-                # subprocess.run en un thread. asyncio.create_subprocess_shell lanza
-                # NotImplementedError en Windows bajo el SelectorEventLoop (uvicorn) →
-                # dejaba a Inti sin terminal. to_thread evita la maquinaria de
-                # subprocess del event loop y funciona en cualquier plataforma.
+                # Validar comando contra whitelist de politicas
+                from inti.policies import is_command_allowed
+                cmd_parts = args["command"].split()
+                if cmd_parts and not is_command_allowed(cmd_parts[0], cmd_parts[1:]):
+                    return f"BLOQUEADO por politicas: '{cmd_parts[0]}' no esta en la whitelist de comandos permitidos"
                 timeout_s = getattr(settings, "run_command_timeout", 120)
                 try:
                     result = await asyncio.to_thread(

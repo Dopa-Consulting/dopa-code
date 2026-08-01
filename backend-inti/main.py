@@ -65,7 +65,7 @@ app.add_middleware(
 # Si no hay token, todo es publico (dev mode). Si hay, requiere auth.
 SKIP_AUTH = not settings.access_token or settings.access_token == "cambiar-en-produccion"
 
-PUBLIC_PATHS = ["/health", "/login", "/favicon.svg", "/manifest.json", "/sw.js", "/assets", "/api"]
+PUBLIC_PATHS = ["/health", "/login", "/favicon.svg", "/manifest.json", "/sw.js", "/assets/"]
 
 @app.middleware("http")
 async def auth_middleware(request, call_next):

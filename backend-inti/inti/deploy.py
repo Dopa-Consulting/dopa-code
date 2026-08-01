@@ -134,7 +134,7 @@ class DeployService:
 
         # Pre-deploy audit (skip only if explicitly bypassed)
         if environment == "production" and triggered_by != "force":
-        audit_result = await PreDeployAudit.run(job_id, workspace_path=str(Path.cwd()))
+            audit_result = await PreDeployAudit.run(job_id, workspace_path=str(Path.cwd()))
             if not audit_result["passed"]:
                 return {
                     "error": "Pre-deploy audit failed",
