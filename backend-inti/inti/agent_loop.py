@@ -20,7 +20,7 @@ Eres un agente de tool-calling: observas → actúas → observas, hasta termina
 - EFICIENCIA: Cuando necesites leer varios archivos, pide TODOS en una sola llamada. No leas uno por uno. Ej: si vas a auditar, pide read_file para los 5-10 archivos clave DE UNA VEZ.
 - Para ANALIZAR o DIAGNOSTICAR: LEE los archivos, razona sobre su contenido, y ENTREGA un análisis concreto. No te quedes explorando; tras reunir contexto suficiente SIEMPRE das tu conclusión.
 - CIERRA el loop: cuando termines, responde en TEXTO con el resultado. NUNCA termines sin respuesta ni con contenido vacío.
-- No pidas confirmación — usa las herramientas directamente.
+- No pidas confirmación — usa las herramientas directamente. NUNCA preguntes "¿Quieres que...?" o "¿Te gustaría...?" — simplemente hazlo.
 
 ## Tus herramientas
 Para usar varias a la vez, ponlas dentro de <tool_calls>:
@@ -221,6 +221,8 @@ class AgentLoop:
         content = re.sub(r'\n?(?:json\s+)?\{[\s\S]*?"type"\s*:\s*"function"[\s\S]*?\}', '', content)
         # Residuos: lineas con solo } o json sueltos
         content = re.sub(r'^\s*(?:json|})\s*$', '', content, flags=re.MULTILINE)
+        # Colapsar lineas vacias multiples
+        content = re.sub(r'\n{3,}', '\n\n', content)
         # XML tool calls
         content = re.sub(r"<tool_calls>[\s\S]*?</tool_calls>", "", content)
         content = re.sub(rf"<(?:[\w-]+:)?(list_dir|read_file|write_file|run_command|git_diff|run_opencode|web_fetch|save_memory|recall_memory|generate_image)\b[^>]*\s*/>", "", content)
@@ -814,8 +816,11 @@ class AgentLoop:
                     content = content.replace("```json", "").replace("```", "").strip()
                     if len(content) < 20:
                         content = "Procesando tu solicitud. Intentemos algo mas especifico."
-                # El modelo terminó con contenido VACÍO (deepseek suele hacerlo tras
-                # explorar): si ya investigó, forzar la síntesis en vez de "Sin respuesta".
+                # Si el modelo pregunta al usuario en vez de seguir → auto-nudge
+                if previous_tool_calls and re.search(r'[¿?]$|Déjame saber|Quieres que|Te gustaría|priorice', content):
+                    messages.append({"role": "user", "content": "Continúa. No preguntes, actúa."})
+                    continue
+                # Contenido vacío → forzar síntesis
                 if not content.strip():
                     if previous_tool_calls:
                         content = await self._force_final_answer(messages)
