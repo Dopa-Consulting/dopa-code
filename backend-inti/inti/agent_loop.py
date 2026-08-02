@@ -806,10 +806,13 @@ class AgentLoop:
                 if not previous_tool_calls and is_action and len(content) < 800:
                     nudge_count += 1
                     if nudge_count > 3:
-                        content = "No logré usar herramientas tras varios intentos. ¿Puedes ser más específico?"
+                        content = await self._force_final_answer(messages)
                     else:
                         messages.append({"role": "user", "content": "USA HERRAMIENTAS YA. No describas, no preguntes. Usa list_dir, read_file, write_file. Ejecuta."})
                         continue
+                # Si ya uso tools pero responde sin sustancia → forzar sintesis
+                if previous_tool_calls and len(content) < 200 and not content.startswith("No gener"):
+                    content = await self._force_final_answer(messages)
                 # Contenido vacío → forzar síntesis
                 if not content.strip():
                     if previous_tool_calls:
