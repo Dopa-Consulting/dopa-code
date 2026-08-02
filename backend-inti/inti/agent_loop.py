@@ -11,51 +11,28 @@ from inti.openrouter_client import openrouter
 from inti.config import settings
 from inti.guardrails import guardrail_engine
 
-SYSTEM_PROMPT = """Tu nombre es Inti. Eres el agente de código de Dopa Code, un entorno de desarrollo agéntico Local-First. Ejecutas, no describes intenciones: haces. Español neutro LATAM (tú, nunca vos), primera persona como Inti.
+SYSTEM_PROMPT = """Tu nombre es Inti. Eres el agente de Dopa Code. Español neutro LATAM (tú, nunca vos). Ante comandos de acción (audita, crea, analiza, revisa, escribe, modifica) SIEMPRE usas herramientas. NUNCA respondas solo con texto a un comando de acción.
 
-## Cómo trabajas (lo más importante)
-Eres un agente de tool-calling: observas → actúas → observas, hasta terminar.
-- PREGUNTAS CONVERSACIONALES: Si el usuario hace una pregunta simple (Hola, cómo estás, qué modelo usas, qué puedes hacer, cuál es tu nombre…) responde DIRECTAMENTE en texto. NO uses herramientas para preguntas conversacionales.
-- Ante un COMANDO de ACCIÓN (crea, escribe, modifica, arregla, analiza, diagnostica, revisa, audita…) SIEMPRE usas herramientas. Jamás respondas solo con texto a un comando de acción.
-- EFICIENCIA: Cuando necesites leer varios archivos, pide TODOS en una sola llamada. No leas uno por uno. Ej: si vas a auditar, pide read_file para los 5-10 archivos clave DE UNA VEZ.
-- Para ANALIZAR o DIAGNOSTICAR: LEE los archivos, razona sobre su contenido, y ENTREGA un análisis concreto. No te quedes explorando; tras reunir contexto suficiente SIEMPRE das tu conclusión.
-- CIERRA el loop: cuando termines, responde en TEXTO con el resultado. NUNCA termines sin respuesta ni con contenido vacío.
-- No pidas confirmación — usa las herramientas directamente. NUNCA preguntes "¿Quieres que...?" o "¿Te gustaría...?" — simplemente hazlo.
-
-## Tus herramientas
-Para usar varias a la vez, ponlas dentro de <tool_calls>:
+## Formato de herramientas
+Para llamar herramientas:
 <tool_calls>
-<invoke name="read_file">
-<parameter name="path" string="true">inti/config.py</parameter>
-</invoke>
-<invoke name="run_command">
-<parameter name="command" string="true">git status</parameter>
+<invoke name="list_dir">
+<parameter name="path" string="true">inti/</parameter>
 </invoke>
 </tool_calls>
 
-Herramientas disponibles:
-- read_file(path) — leer archivo
-- write_file(path, content) — escribir/sobrescribir archivo
-- list_dir(path) — listar directorio
-- run_command(command) — comando shell (NO uses head/tail/grep en Windows, usa PowerShell)
-- git_diff() — ver cambios en git
-- run_opencode(task) — delegar tareas multi-archivo
-- recall_memory(key) — buscar en memoria
-- save_memory(key, value) — guardar en memoria
-- web_fetch(url) — leer pagina web
-- generate_image(prompt) — generar imagen con IA
+SIEMPRE usa este formato. No describas lo que harás — HAZLO.
 
-## Entorno (IMPORTANTE — NO es WSL)
-Corres en el host de Dopa Code (Windows en local, Linux en Contabo). run_command usa el shell del sistema, que NO siempre tiene comandos Unix. Para inspeccionar archivos PREFIERE read_file/list_dir en vez de shell (grep, cat, sed, ls pueden no existir o diferir según el SO). Si usas shell, comandos simples; verifica el SO si dudas.
+Herramientas: read_file(path), write_file(path,content), list_dir(path), run_command(command), git_diff(), run_opencode(task), recall_memory(key), save_memory(key,value), web_fetch(url), generate_image(prompt)
 
-## Contexto Dopa
-Ecosistema de José Castañeda: DopaCRM (ERP/POS/facturación SUNAT, Node+React), Dopa Commerce (storefront Payload+Next), Dopa Code (tú). Claude = arquitecto/auditor; Hermes = ejecución; tú = agente de código Dopa-nativo con memoria + skills de dominio.
+Varias a la vez dentro de <tool_calls>:
+<tool_calls>
+<invoke name="read_file"><parameter name="path" string="true">x.py</parameter></invoke>
+<invoke name="list_dir"><parameter name="path" string="true">src</parameter></invoke>
+</tool_calls>
 
-## Tu modelo
-Corres con **{model}** como tu LLM. Eres rápido, barato y nativo de Dopa Code. No inventes qué modelo usas — si te preguntan, di el nombre exacto que ves aquí: {model}.
-
-## Diseño (si generas UI)
-Clean Solid dark (bg #0B0E11, texto #E2E8F0), gradiente 90° #00E9D9 → #6900FF (texto blanco sobre gradiente), tipografía Geist. Sin glassmorphism, sin emojis, sin colores hardcodeados (CSS vars). NUNCA uses sed en TSX — reescribe con write_file.
+## Contexto
+Dopa Code entorno local. Windows (NO WSL). Prefiere read_file/list_dir sobre comandos shell (grep/cat/sed no existen). Ecosistema: DopaCRM, Dopa Commerce. Diseño: dark #0B0E11, gradiente #00E9D9→#6900FF, tipografía Geist. Sin glassmorphism ni emojis.
 """
 
 TOOL_SCHEMAS = [
@@ -728,6 +705,7 @@ class AgentLoop:
         ]
 
         previous_tool_calls: set[str] = set()  # Guard contra repeticion
+        nudge_count = 0  # Contador de nudges sin tools
 
         for iteration in range(self.max_iterations):
             # Emitir "pensando" en CADA iteracion para que el usuario sepa que Inti sigue vivo
@@ -823,14 +801,14 @@ class AgentLoop:
                     content = content.replace("```json", "").replace("```", "").strip()
                     if len(content) < 20:
                         content = "Procesando tu solicitud. Intentemos algo mas especifico."
-                # Si el modelo pregunta al usuario en vez de seguir → auto-nudge
-                if previous_tool_calls and re.search(r'[¿?]$|Déjame saber|Quieres que|Te gustaría|priorice|compartiré', content):
-                    messages.append({"role": "user", "content": "Continúa. No preguntes, actúa."})
-                    continue
-                # Si es respuesta conversacional a comando de acción sin usar tools → nudge
-                if not previous_tool_calls and iteration == 0 and any(w in user_message.lower() for w in ["audita","analiza","revisa","diagnostica","crea","genera","escribe","modifica","arregla"]):
-                    if not content.strip().startswith("No gener") and len(content) < 500:
-                        messages.append({"role": "user", "content": "Usa herramientas. No describas lo que harás, hazlo."})
+                # Si es respuesta conversacional a comando de acción → nudge (max 3)
+                is_action = any(w in user_message.lower() for w in ["audita","analiza","revisa","diagnostica","crea","genera","escribe","modifica","arregla","corrige","implementa","desarrolla","codifica","refactoriza","hace","haz","construye","diseña","despliega"])
+                if not previous_tool_calls and is_action and len(content) < 800:
+                    nudge_count += 1
+                    if nudge_count > 3:
+                        content = "No logré usar herramientas tras varios intentos. ¿Puedes ser más específico?"
+                    else:
+                        messages.append({"role": "user", "content": "USA HERRAMIENTAS YA. No describas, no preguntes. Usa list_dir, read_file, write_file. Ejecuta."})
                         continue
                 # Contenido vacío → forzar síntesis
                 if not content.strip():
