@@ -824,9 +824,14 @@ class AgentLoop:
                     if len(content) < 20:
                         content = "Procesando tu solicitud. Intentemos algo mas especifico."
                 # Si el modelo pregunta al usuario en vez de seguir → auto-nudge
-                if previous_tool_calls and re.search(r'[¿?]$|Déjame saber|Quieres que|Te gustaría|priorice', content):
+                if previous_tool_calls and re.search(r'[¿?]$|Déjame saber|Quieres que|Te gustaría|priorice|compartiré', content):
                     messages.append({"role": "user", "content": "Continúa. No preguntes, actúa."})
                     continue
+                # Si es respuesta conversacional a comando de acción sin usar tools → nudge
+                if not previous_tool_calls and iteration == 0 and any(w in user_message.lower() for w in ["audita","analiza","revisa","diagnostica","crea","genera","escribe","modifica","arregla"]):
+                    if not content.strip().startswith("No gener") and len(content) < 500:
+                        messages.append({"role": "user", "content": "Usa herramientas. No describas lo que harás, hazlo."})
+                        continue
                 # Contenido vacío → forzar síntesis
                 if not content.strip():
                     if previous_tool_calls:
