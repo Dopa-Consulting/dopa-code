@@ -215,15 +215,30 @@ class AgentLoop:
 
     def _strip_tool_text(self, content: str) -> str:
         """Remueve JSON/XML de tool calls del texto visible."""
-        # Bloque JSON multi-linea con llaves anidadas
-        content = re.sub(r'```?json\s*\n\{[\s\S]*?\n```', '', content)
-        # JSON en una linea o multi-linea sin fences
-        content = re.sub(r'\n?\{[\s\S]*?"type"\s*:\s*"function"[\s\S]*?\}\n?', '', content)
-        content = re.sub(r'```?plaintext\s*\n', '', content)
+        # Bloque JSON con o sin fences
+        content = re.sub(r'```(?:json|plaintext)?\s*\n?\{[\s\S]*?\}\s*\n?```', '', content)
+        # JSON en linea o multi-linea (con llaves anidadas)
+        content = re.sub(r'\n?(?:json\s+)?\{[\s\S]*?"type"\s*:\s*"function"[\s\S]*?\}', '', content)
+        # Residuos: lineas con solo } o json sueltos
+        content = re.sub(r'^\s*(?:json|})\s*$', '', content, flags=re.MULTILINE)
         # XML tool calls
         content = re.sub(r"<tool_calls>[\s\S]*?</tool_calls>", "", content)
         content = re.sub(rf"<(?:[\w-]+:)?(list_dir|read_file|write_file|run_command|git_diff|run_opencode|web_fetch|save_memory|recall_memory|generate_image)\b[^>]*\s*/>", "", content)
         return content.strip()
+
+    def _make_clean_content(self, raw: str, tool_calls: list[dict] | None) -> str:
+        """Genera contenido limpio. Si hay tool_calls, extrae texto antes del JSON."""
+        if not tool_calls:
+            return self._strip_tool_text(raw)
+        # Hay tool_calls → extraer solo el texto antes del primer JSON
+        stripped = self._strip_tool_text(raw)
+        if stripped:
+            return stripped
+        # Si no queda texto, generar descripcion de las tools
+        names = [tc["function"]["name"] for tc in tool_calls if tc.get("function", {}).get("name")]
+        if names:
+            return f"Ejecutando: {', '.join(names[:5])}"
+        return ""
 
     def _parse_xml_tool_calls(self, content: str) -> tuple[list[dict] | None, str]:
         """Si el LLM responde con <tool_calls><invoke>..., parsear a tool_calls nativos."""
@@ -817,7 +832,7 @@ class AgentLoop:
 
             messages.append({
                 "role": "assistant",
-                "content": self._strip_tool_text(resp.get("content") or ""),
+                "content": self._make_clean_content(resp.get("content") or "", tool_calls),
                 "tool_calls": tool_calls,
             })
 
