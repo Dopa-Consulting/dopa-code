@@ -215,12 +215,16 @@ class AgentLoop:
 
     def _strip_tool_text(self, content: str) -> str:
         """Remueve JSON/XML de tool calls del texto visible."""
-        # Bloque JSON con o sin fences
+        # Bloque JSON con fences (```json ... ```)
         content = re.sub(r'```(?:json|plaintext)?\s*\n?\{[\s\S]*?\}\s*\n?```', '', content)
-        # JSON en linea o multi-linea (con llaves anidadas)
+        # JSON con "type": "function" (formato nativo)
         content = re.sub(r'\n?(?:json\s+)?\{[\s\S]*?"type"\s*:\s*"function"[\s\S]*?\}', '', content)
-        # Residuos: lineas con solo } o json sueltos
-        content = re.sub(r'^\s*(?:json|})\s*$', '', content, flags=re.MULTILINE)
+        # JSON con "function" y "parameters" (formato alternativo de DeepSeek)
+        content = re.sub(r'\n?(?:json\s+)?\{(?:[^{}]*?"function"\s*:\s*"[^"]+"[^{}]*?"parameters"\s*:\s*\{[^{}]*?\}[^{}]*?|[^{}]*?"parameters"\s*:\s*\{[^{}]*?\}[^{}]*?"function"\s*:\s*"[^"]+")[^{}]*?\}', '', content)
+        # Cualquier bloque JSON que empiece con { y contenga nombres de tools conocidos
+        content = re.sub(r'\n?(?:json\s+)?\{[^}]*?"(?:path|content|command|task|prompt|key|value)"[^}]*?\}', '', content)
+        # Residuos: lineas con solo } o json sueltos, o JSON parcial
+        content = re.sub(r'^\s*(?:json|\}|"function"|"parameters")\s*$', '', content, flags=re.MULTILINE)
         # Colapsar lineas vacias multiples
         content = re.sub(r'\n{3,}', '\n\n', content)
         # XML tool calls
@@ -229,18 +233,21 @@ class AgentLoop:
         return content.strip()
 
     def _make_clean_content(self, raw: str, tool_calls: list[dict] | None) -> str:
-        """Genera contenido limpio. Si hay tool_calls, extrae texto antes del JSON."""
+        """Genera contenido limpio. Si hay tool_calls, solo muestra un resumen."""
         if not tool_calls:
             return self._strip_tool_text(raw)
-        # Hay tool_calls → extraer solo el texto antes del primer JSON
-        stripped = self._strip_tool_text(raw)
-        if stripped:
-            return stripped
-        # Si no queda texto, generar descripcion de las tools
         names = [tc["function"]["name"] for tc in tool_calls if tc.get("function", {}).get("name")]
-        if names:
-            return f"Ejecutando: {', '.join(names[:5])}"
-        return ""
+        args_list = []
+        for tc in tool_calls:
+            fn = tc.get("function", {})
+            n = fn.get("name", "")
+            try:
+                a = json.loads(fn.get("arguments", "{}"))
+            except Exception:
+                a = {}
+            arg = a.get("path") or a.get("command") or a.get("task") or ""
+            args_list.append(f"{n}({arg[:40]})" if arg else n)
+        return "Usando: " + ", ".join(args_list[:8]) if args_list else ""
 
     def _parse_xml_tool_calls(self, content: str) -> tuple[list[dict] | None, str]:
         """Si el LLM responde con <tool_calls><invoke>..., parsear a tool_calls nativos."""
