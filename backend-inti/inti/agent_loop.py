@@ -293,7 +293,10 @@ class AgentLoop:
                         final_resp = chunk
                 return final_resp
         # Fallback no-streaming
-        return await self._chat(messages, tools)
+        try:
+            return await self._chat(messages, tools)
+        except Exception as e:
+            return {"error": f"OpenRouter _chat failed: {str(e)}"}
         """Resuelve una ruta relativa al workspace y verifica que no escape.
 
         Usa is_relative_to (no startswith) para que un directorio hermano con
