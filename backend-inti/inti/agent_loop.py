@@ -213,6 +213,16 @@ class AgentLoop:
         self.max_iterations = settings.max_iterations
         self.allowed_dirs = [Path(d).resolve() for d in (allowed_dirs or []) if Path(d).is_dir()]
 
+    def _strip_tool_text(self, content: str) -> str:
+        """Remueve JSON/XML de tool calls del texto visible."""
+        # JSON tool calls: {"type": "function", "function": ...}
+        content = re.sub(r'\n?```?json\s*\n?\{[^}]*"type"\s*:\s*"function"[^}]*\}\n?', '', content)
+        content = re.sub(r'\n?\{[^}]*"type"\s*:\s*"function"[^}]*\}\n?', '', content)
+        # XML tool calls
+        content = re.sub(r"<tool_calls>[\s\S]*?</tool_calls>", "", content)
+        content = re.sub(rf"<(?:[\w-]+:)?(list_dir|read_file|write_file|run_command|git_diff|run_opencode|web_fetch|save_memory|recall_memory|generate_image)\b[^>]*\s*/>", "", content)
+        return content.strip()
+
     def _parse_xml_tool_calls(self, content: str) -> tuple[list[dict] | None, str]:
         """Si el LLM responde con <tool_calls><invoke>..., parsear a tool_calls nativos."""
         import uuid
@@ -809,7 +819,7 @@ class AgentLoop:
 
             messages.append({
                 "role": "assistant",
-                "content": resp.get("content") or "",
+                "content": self._strip_tool_text(resp.get("content") or ""),
                 "tool_calls": tool_calls,
             })
 

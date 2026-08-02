@@ -687,7 +687,7 @@ class MultiProviderClient:
 
                         if content_delta:
                             collected_content += content_delta
-                            if "<tool_calls>" in collected_content or "<invoke" in collected_content:
+                            if "<tool_calls>" in collected_content or "<invoke" in collected_content or '"type": "function"' in collected_content:
                                 suppress_stream = True
                             if not suppress_stream:
                                 yield {"token": content_delta, "content_so_far": collected_content}
