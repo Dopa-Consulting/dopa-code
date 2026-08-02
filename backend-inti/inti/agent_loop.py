@@ -1,6 +1,7 @@
 """AgentLoop — núcleo del agente Inti con tool-calling iterativo."""
 
 import json
+import re
 import asyncio
 import subprocess
 from pathlib import Path
@@ -702,11 +703,11 @@ class AgentLoop:
             try:
                 resp = await self._chat_stream(emit, messages, TOOL_SCHEMAS)
             except Exception as chat_err:
-                await emit({
-                    "event_type": "error",
-                    "payload": {"error": f"Error de conexion LLM: {str(chat_err)[:200]}"},
-                })
-                return
+                    await emit({
+                        "event_type": "error",
+                        "payload": {"error": f"Error de conexion LLM: {str(chat_err)[:200]}"},
+                    })
+                    return
 
             # Si OpenRouter falla (sin creditos, billing), intentar con Gemini
             if resp.get("error"):
