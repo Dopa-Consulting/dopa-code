@@ -215,9 +215,11 @@ class AgentLoop:
 
     def _strip_tool_text(self, content: str) -> str:
         """Remueve JSON/XML de tool calls del texto visible."""
-        # JSON tool calls: {"type": "function", "function": ...}
-        content = re.sub(r'\n?```?json\s*\n?\{[^}]*"type"\s*:\s*"function"[^}]*\}\n?', '', content)
-        content = re.sub(r'\n?\{[^}]*"type"\s*:\s*"function"[^}]*\}\n?', '', content)
+        # Bloque JSON multi-linea con llaves anidadas
+        content = re.sub(r'```?json\s*\n\{[\s\S]*?\n```', '', content)
+        # JSON en una linea o multi-linea sin fences
+        content = re.sub(r'\n?\{[\s\S]*?"type"\s*:\s*"function"[\s\S]*?\}\n?', '', content)
+        content = re.sub(r'```?plaintext\s*\n', '', content)
         # XML tool calls
         content = re.sub(r"<tool_calls>[\s\S]*?</tool_calls>", "", content)
         content = re.sub(rf"<(?:[\w-]+:)?(list_dir|read_file|write_file|run_command|git_diff|run_opencode|web_fetch|save_memory|recall_memory|generate_image)\b[^>]*\s*/>", "", content)
@@ -791,12 +793,8 @@ class AgentLoop:
                         })
                         return
                 # Sin checkpoint → chat_response normal
-                content = resp.get("content", "") or ""
-                # Limpiar XML/HTML de tool-calls que el LLM incrusta en el texto
-                content = re.sub(r"<tool_calls>[\s\S]*?</tool_calls>", "", content)
-                content = re.sub(r"<(list_dir|read_file|write_file|run_command|git_diff|run_opencode|web_fetch|save_memory|recall_memory|generate_image)\b[^>]*\s*/>", "", content)
-                content = content.strip()
-                # Si el contenido es puro JSON (el LLM intento tool-calling por texto), limpiarlo
+                content = self._strip_tool_text(resp.get("content", "") or "")
+                # Si el contenido es puro JSON o vacio after strip
                 if content.strip().startswith("```json"):
                     content = content.replace("```json", "").replace("```", "").strip()
                     if len(content) < 20:
