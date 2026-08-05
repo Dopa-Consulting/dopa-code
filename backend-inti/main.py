@@ -148,6 +148,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     "event_type": "session_created",
                     "payload": {"session_id": session_id, "workspace": workspace}
                 })
+                # Registrar este WebSocket como emitter para la sesion
+                orchestrator.register_emitter(lambda ev: websocket.send_json(ev))
 
             # Cargar historial persistente de la DB para esta sesion
             if session_id and not history:

@@ -7,10 +7,10 @@ modelo LLM y workspace. Los jobs se delegan a sesiones especificas.
 Arquitectura:
     Inti Orchestrator
         │
-        ├── Session: architect-001 (Opus 4.8, plan, workspace=tenant-x)
+        ├── Session: architect-001 (Sonnet 5, plan, workspace=tenant-x)
         ├── Session: builder-001 (DeepSeek, build, workspace=tenant-x)
-        ├── Session: reviewer-001 (Gemini 3.6, review, workspace=tenant-x)
-        └── Session: builder-002 (Sonnet 5, build, workspace=tenant-y)
+        ├── Session: reviewer-001 (Gemini Flash, review, workspace=tenant-x)
+        └── Session: builder-002 (DeepSeek, build, workspace=tenant-y)
 
 Cada sesion:
   - Tiene estado (idle, running, completed, error)
@@ -30,15 +30,12 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Awaitable, Literal
 
 from inti.config import settings
 
 logger = logging.getLogger("inti.orchestrator")
-
-SESSION_FILE = Path(__file__).parent.parent / "sessions.json"
 
 AgentRole = Literal["architect", "builder", "reviewer", "deployer", "custom"]
 SessionStatus = Literal["idle", "running", "waiting", "completed", "error", "disconnected"]
@@ -57,11 +54,12 @@ class AgentSession:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_active_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict = field(default_factory=dict)
+    task: asyncio.Task | None = field(default=None, repr=False)
 
 
 ROLE_DEFAULTS: dict[AgentRole, dict] = {
     "architect": {
-        "model": "anthropic/claude-opus-4-8",
+        "model": "anthropic/claude-sonnet-5",
         "provider": "openrouter",
         "description": "Planifica y disena soluciones. No modifica codigo.",
         "icon": "plan",
@@ -69,7 +67,7 @@ ROLE_DEFAULTS: dict[AgentRole, dict] = {
         "can_review": True,
     },
     "builder": {
-        "model": "deepseek/deepseek-chat",
+        "model": settings.loop_model,
         "provider": "openrouter",
         "description": "Ejecuta cambios en el codigo. Modifica archivos.",
         "icon": "build",
@@ -93,7 +91,7 @@ ROLE_DEFAULTS: dict[AgentRole, dict] = {
         "can_review": False,
     },
     "custom": {
-        "model": "deepseek/deepseek-chat",
+        "model": settings.loop_model,
         "provider": "openrouter",
         "description": "Agente personalizado. El usuario elige rol y modelo.",
         "icon": "custom",
@@ -109,54 +107,65 @@ class Orchestrator:
     def __init__(self):
         self.sessions: dict[str, AgentSession] = {}
         self.max_concurrent: int = 5
-        self._load_from_file()
+        self._emitters: list[Callable[[dict], Awaitable[None]]] = []
 
-    def _persist_to_file(self):
-        """Guarda sesiones a JSON para sobrevivir reinicios del daemon."""
-        try:
-            data = {}
-            for sid, s in self.sessions.items():
-                data[sid] = {
-                    "id": s.id,
-                    "role": s.role,
-                    "model": s.model,
-                    "provider": s.provider,
-                    "status": s.status,
-                    "workspace_path": s.workspace_path,
-                    "current_job_id": s.current_job_id,
-                    "metadata": s.metadata,
-                    "created_at": s.created_at.isoformat() if s.created_at else None,
-                    "last_active_at": s.last_active_at.isoformat() if s.last_active_at else None,
-                }
-            SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(SESSION_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception:
-            logger.warning("Failed to persist sessions", exc_info=True)
+    def register_emitter(self, emitter: Callable[[dict], Awaitable[None]]):
+        """Registra un callback para emitir eventos WebSocket (SessionStateChanged)."""
+        self._emitters.append(emitter)
 
-    def _load_from_file(self):
-        """Carga sesiones desde JSON al iniciar el daemon."""
-        if not SESSION_FILE.exists():
-            return
+    async def _emit_event(self, event: dict):
+        """Emite un evento a todos los WebSockets registrados."""
+        for emitter in self._emitters:
+            try:
+                await emitter(event)
+            except Exception:
+                logger.warning("Emitter failed", exc_info=True)
+
+    async def _emit_session_changed(self, session: AgentSession):
+        """Emite SessionStateChanged al frontend."""
+        await self._emit_event({
+            "event_type": "SessionStateChanged",
+            "job_id": "",
+            "version": 1,
+            "payload": {
+                "session_id": session.id,
+                "role": session.role,
+                "model": session.model,
+                "status": session.status,
+                "workspace_path": session.workspace_path,
+                "current_job_id": session.current_job_id,
+                "metadata": session.metadata,
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+    async def _persist_session(self, session: AgentSession):
+        """Persiste sesion a DB (fire-and-forget)."""
         try:
-            with open(SESSION_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            for sid, sdata in data.items():
-                self.sessions[sid] = AgentSession(
-                    id=sdata.get("id", sid),
-                    role=sdata.get("role", "builder"),
-                    model=sdata.get("model", ""),
-                    provider=sdata.get("provider", ""),
-                    status=sdata.get("status", "idle"),
-                    workspace_path=sdata.get("workspace_path", ""),
-                    current_job_id=sdata.get("current_job_id"),
-                    metadata=sdata.get("metadata", {}),
-                    created_at=datetime.fromisoformat(sdata["created_at"]) if sdata.get("created_at") else datetime.now(timezone.utc),
-                    last_active_at=datetime.fromisoformat(sdata["last_active_at"]) if sdata.get("last_active_at") else None,
-                )
-            logger.info(f"Loaded {len(self.sessions)} sessions from {SESSION_FILE}")
+            from inti.database import async_session
+            from inti.models.agent_session import AgentSession as AgentSessionModel
+            async with async_session() as db:
+                existing = await db.get(AgentSessionModel, session.id)
+                if existing:
+                    existing.status = session.status
+                    existing.current_job_id = session.current_job_id
+                    existing.last_active_at = session.last_active_at
+                else:
+                    db.add(AgentSessionModel(
+                        id=session.id,
+                        role=session.role,
+                        model=session.model,
+                        provider=session.provider,
+                        status=session.status,
+                        workspace_path=session.workspace_path,
+                        current_job_id=session.current_job_id,
+                        meta_info=session.metadata,
+                        created_at=session.created_at,
+                        last_active_at=session.last_active_at,
+                    ))
+                await db.commit()
         except Exception:
-            logger.warning("Failed to load sessions", exc_info=True)
+            logger.warning("Failed to persist session to DB", exc_info=True)
 
     def create_session(
         self,
@@ -183,7 +192,7 @@ class Orchestrator:
             session.status = "waiting"
 
         self.sessions[session.id] = session
-        self._persist_to_file()
+        asyncio.ensure_future(self._persist_session(session))
         logger.info(f"Session created: {session.id} [{role}] model={session.model}")
         return session
 
@@ -202,17 +211,67 @@ class Orchestrator:
             sessions = [s for s in sessions if s.status == status]
         return sorted(sessions, key=lambda s: s.created_at, reverse=True)
 
-    def assign_job(self, session_id: str, job_id: str) -> bool:
+    def assign_job(self, session_id: str, job_id: str, user_message: str = "") -> bool:
+        """Asigna un job a una sesion y spawnea el AgentLoop en background."""
         session = self.sessions.get(session_id)
         if not session:
             return False
         if session.status == "running":
             return False
+
         session.current_job_id = job_id
         session.status = "running"
         session.last_active_at = datetime.now(timezone.utc)
-        self._persist_to_file()
+
+        # Spawn AgentLoop en background
+        task = asyncio.create_task(self._run_session_job(session, job_id, user_message))
+        session.task = task
+
+        asyncio.ensure_future(self._persist_session(session))
+        asyncio.ensure_future(self._emit_session_changed(session))
+        logger.info(f"Job {job_id} assigned to session {session_id} [{session.role}]")
         return True
+
+    async def _run_session_job(self, session: AgentSession, job_id: str, user_message: str):
+        """Ejecuta un job en background via AgentLoop."""
+        from inti.agent_loop import AgentLoop
+
+        async def emit_wrapper(ev):
+            """Wrapper que emite al WebSocket y registra eventos de sesion."""
+            # Emitir al WebSocket del cliente
+            await self._emit_event(ev)
+
+        try:
+            # Cargar el job de la DB para obtener su prompt
+            from inti.database import async_session
+            from sqlalchemy import select
+            from inti.models.job import Job
+
+            prompt = user_message
+            try:
+                async with async_session() as db:
+                    result = await db.execute(select(Job).where(Job.id == job_id))
+                    job = result.scalar_one_or_none()
+                    if job:
+                        prompt = job.description or prompt
+            except Exception:
+                pass
+
+            workspace = Path(session.workspace_path) if session.workspace_path else Path.cwd()
+
+            loop = AgentLoop(
+                workspace=str(workspace),
+                model=session.model,
+                profile=session.metadata.get("profile"),  # type: ignore[arg-type]
+            )
+            await loop.run(prompt, emit=emit_wrapper)
+
+            # Job completado
+            self.complete_job(session.id, success=True)
+
+        except Exception as e:
+            logger.error(f"Session {session.id} job {job_id} failed: {e}", exc_info=True)
+            self.complete_job(session.id, success=False)
 
     def complete_job(self, session_id: str, success: bool = True) -> bool:
         session = self.sessions.get(session_id)
@@ -221,9 +280,11 @@ class Orchestrator:
         session.status = "completed" if success else "error"
         session.current_job_id = None
         session.last_active_at = datetime.now(timezone.utc)
+        session.task = None
 
         self._promote_waiting()
-        self._persist_to_file()
+        asyncio.ensure_future(self._persist_session(session))
+        asyncio.ensure_future(self._emit_session_changed(session))
         return True
 
     def disconnect_session(self, session_id: str) -> bool:
@@ -232,15 +293,32 @@ class Orchestrator:
             return False
         session.status = "disconnected"
         session.current_job_id = None
-        self._persist_to_file()
+        asyncio.ensure_future(self._persist_session(session))
         return True
 
     def remove_session(self, session_id: str) -> bool:
         if session_id in self.sessions:
+            # Cancelar task si esta corriendo
+            s = self.sessions[session_id]
+            if s.task and not s.task.done():
+                s.task.cancel()
             del self.sessions[session_id]
-            self._persist_to_file()
+            # Borrar de DB
+            asyncio.ensure_future(self._delete_session(session_id))
             return True
         return False
+
+    async def _delete_session(self, session_id: str):
+        try:
+            from inti.database import async_session
+            from inti.models.agent_session import AgentSession as AgentSessionModel
+            async with async_session() as db:
+                existing = await db.get(AgentSessionModel, session_id)
+                if existing:
+                    await db.delete(existing)
+                    await db.commit()
+        except Exception:
+            logger.warning("Failed to delete session from DB", exc_info=True)
 
     def get_available_roles(self) -> list[dict]:
         return [
