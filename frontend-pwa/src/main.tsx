@@ -11,6 +11,15 @@ if ("serviceWorker" in navigator) {
       (err) => console.warn("[sw] Registration failed:", err)
     );
   });
+
+  // Escuchar mensajes del SW (Background Sync triggers)
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type === "bg-sync" && event.data?.tag === "flush-pending") {
+      import("./services/sync").then(({ flushPendingActions }) => {
+        flushPendingActions();
+      });
+    }
+  });
 }
 
 createRoot(document.getElementById("root")!).render(

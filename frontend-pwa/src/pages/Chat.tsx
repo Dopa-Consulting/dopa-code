@@ -445,6 +445,7 @@ export default function Chat() {
       </div>
 
       <div className="flex gap-2 mt-3">
+        <MicButton onTranscript={(text) => { setInput(text); }} />
         <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSend()}
           placeholder="crea landing page / Hola Inti / git status"
           autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
@@ -487,5 +488,79 @@ function DirsAdicionales() {
         </div>
       ))}
     </details>
+  );
+}
+
+function MicButton({ onTranscript }: { onTranscript: (t: string) => void }) {
+  const [recording, setRecording] = useState(false);
+  const [unsupported, setUnsupported] = useState(false);
+  const mediaRef = useRef<MediaRecorder | null>(null);
+
+  const startRecording = useCallback(async () => {
+    // Intentar MediaRecorder primero (para enviar audio al backend)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        const form = new FormData();
+        form.append("audio", blob, "recording.webm");
+        try {
+          const res = await fetch("/api/v1/voice/transcribe", { method: "POST", body: form });
+          const data = await res.json();
+          if (data.transcript) onTranscript(data.transcript);
+        } catch { /* fallback below */ }
+      };
+      recorder.start();
+      mediaRef.current = recorder;
+      setRecording(true);
+    } catch {
+      // Fallback: Web Speech API (gratis, local, sin backend)
+      try {
+        const SpeechRecognition = (window as unknown as Record<string,unknown>).webkitSpeechRecognition as { new(): { lang: string; onresult: (e: { results: { transcript: string }[][] }) => void; onerror: () => void; onend: () => void; start: () => void; stop: () => void } } | undefined;
+        if (!SpeechRecognition) { setUnsupported(true); return; }
+        const sr = new SpeechRecognition();
+        sr.lang = "es-PE";
+        sr.onresult = (e: { results: { transcript: string }[][] }) => {
+          const t = e.results[0][0].transcript;
+          onTranscript(t);
+        };
+        sr.onerror = () => setRecording(false);
+        sr.onend = () => setRecording(false);
+        sr.start();
+        setRecording(true);
+        (mediaRef as React.MutableRefObject<unknown>).current = sr;
+      } catch {
+        setUnsupported(true);
+      }
+    }
+  }, [onTranscript]);
+
+  const stopRecording = useCallback(() => {
+    setRecording(false);
+    if (mediaRef.current) {
+      try { (mediaRef.current as MediaRecorder).stop(); } catch { try { (mediaRef.current as { stop: () => void }).stop(); } catch {} }
+    }
+  }, []);
+
+  if (unsupported) return null;
+
+  return (
+    <button
+      onMouseDown={startRecording}
+      onMouseUp={stopRecording}
+      onMouseLeave={stopRecording}
+      onTouchStart={startRecording}
+      onTouchEnd={stopRecording}
+      className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
+        recording ? "bg-red-500 text-white animate-pulse" : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+      }`}
+      title="Mantener presionado para grabar (voz)"
+    >
+      {recording ? "... " : "\uD83C\uDF99"}
+    </button>
   );
 }

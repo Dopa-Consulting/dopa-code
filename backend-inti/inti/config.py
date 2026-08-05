@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     access_token: str = "cambiar-en-produccion"
     bridge_token: str = ""
 
+    # Voice (ElevenLabs / Web Speech API)
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
+    voice_enabled: bool = False
+
     model_config = {"env_prefix": "DOPA_", "env_file": ".env", "extra": "ignore"}
 
     @model_validator(mode="after")

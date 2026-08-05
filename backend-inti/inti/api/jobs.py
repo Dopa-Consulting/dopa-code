@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timezone
 
 from inti.database import get_db
 from inti.models.job import Job
@@ -15,6 +16,7 @@ router = APIRouter()
 async def list_jobs(
     status: str | None = Query(None),
     profile: str | None = Query(None),
+    since: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Job)
@@ -22,6 +24,12 @@ async def list_jobs(
         query = query.where(Job.status == status)
     if profile:
         query = query.where(Job.profile == profile)
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+            query = query.where(Job.updated_at > since_dt)
+        except ValueError:
+            pass
     query = query.order_by(Job.updated_at.desc()).limit(50)
     result = await db.execute(query)
     jobs = result.scalars().all()
@@ -122,7 +130,7 @@ async def create_job(
 
 
 @router.post("/{job_id}/approve")
-async def approve_job(job_id: str, device_id: str = "", db: AsyncSession = Depends(get_db)):
+async def approve_job(job_id: str, device_id: str = Body("", embed=False), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
@@ -165,7 +173,7 @@ async def approve_job(job_id: str, device_id: str = "", db: AsyncSession = Depen
 
 
 @router.post("/{job_id}/reject")
-async def reject_job(job_id: str, device_id: str = "", db: AsyncSession = Depends(get_db)):
+async def reject_job(job_id: str, device_id: str = Body("", embed=False), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
@@ -201,10 +209,15 @@ async def reject_job(job_id: str, device_id: str = "", db: AsyncSession = Depend
 
 
 @router.get("/{job_id}/diffs")
-async def list_diffs(job_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(Diff).where(Diff.job_id == job_id).order_by(Diff.created_at.desc())
-    )
+async def list_diffs(job_id: str, since: str | None = Query(None), db: AsyncSession = Depends(get_db)):
+    query = select(Diff).where(Diff.job_id == job_id)
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+            query = query.where(Diff.updated_at > since_dt)
+        except ValueError:
+            pass
+    result = await db.execute(query.order_by(Diff.created_at.desc()))
     diffs = result.scalars().all()
     return {
         "diffs": [

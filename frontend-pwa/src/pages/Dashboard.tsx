@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import useWebSocket from "../hooks/useWebSocket";
 import { syncJobs, getLocalJobs, flushPendingActions, type Job } from "../services/sync";
+import dbase from "../db";
 
 const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 const API_BASE = `${location.protocol}//${location.host}/api/v1`;
@@ -45,13 +46,14 @@ export default function Dashboard() {
   const inQA = jobs.filter((j) => ["qa", "qa_pending"].includes(j.status)).length;
   const deployed = jobs.filter((j) => j.status === "deployed").length;
 
+  const [pendingCount, setPendingCount] = useState(0);
+
   const loadAll = useCallback(async () => {
     setSyncing(true);
-    const [local, _] = await Promise.all([getLocalJobs(), syncJobs()]);
-    if (local.length > 0) setJobs(local);
-    const remote = await syncJobs();
-    if (remote.length > 0) setJobs(remote);
-    await flushPendingActions();
+    const [local, remote] = await Promise.all([getLocalJobs(), syncJobs()]);
+    setJobs(remote.length > 0 ? remote : local);
+    const flushed = await flushPendingActions();
+    setPendingCount(prev => prev - flushed);
 
     try {
       const res = await fetch(`${API_BASE}/sessions/`);
@@ -78,6 +80,16 @@ export default function Dashboard() {
 
   useEffect(() => { if (lastEvent) loadAll(); }, [lastEvent, loadAll]);
 
+  useEffect(() => {
+    const onOnline = () => { loadAll(); };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [loadAll]);
+
+  useEffect(() => {
+    dbase.pendingActions.where("status").equals("pending").count().then(setPendingCount);
+  }, []);
+
   const createSession = async (role: string) => {
     try {
       await fetch(`${API_BASE}/sessions/`, {
@@ -100,6 +112,8 @@ export default function Dashboard() {
       </div>
 
       {syncing && <div className="text-xs text-slate-500 text-center">Syncing...</div>}
+      {!navigator.onLine && <div className="text-xs text-red-400 text-center bg-red-900/30 rounded py-1">Sin conexion — cambios se sincronizaran al reconectar</div>}
+      {pendingCount > 0 && <div className="text-xs text-amber-400 text-center">{pendingCount} accion(es) pendientes de sincronizar</div>}
 
       <div className="grid grid-cols-2 gap-3">
         {[

@@ -11,6 +11,7 @@ type WsEvent = {
 export default function useWebSocket(url: string) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const queueRef = useRef<unknown[]>([]);
   const [connected, setConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<WsEvent | null>(null);
   const listenersRef = useRef<Map<string, Set<(e: WsEvent) => void>>>(new Map());
@@ -23,6 +24,12 @@ export default function useWebSocket(url: string) {
 
     ws.onopen = () => {
       setConnected(true);
+      // Flush queued messages
+      const q = queueRef.current;
+      queueRef.current = [];
+      for (const msg of q) {
+        ws.send(JSON.stringify(msg));
+      }
       console.log("[ws] Connected to Inti");
     };
 
@@ -80,6 +87,8 @@ export default function useWebSocket(url: string) {
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
+    } else {
+      queueRef.current.push(data);
     }
   }, []);
 

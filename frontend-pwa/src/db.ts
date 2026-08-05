@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 
-interface Job {
+export interface Job {
   id: string;
   title: string;
   description: string;
@@ -13,7 +13,7 @@ interface Job {
   autonomyLevel: string;
 }
 
-interface Diff {
+export interface Diff {
   id: string;
   jobId: string;
   summary: string;
@@ -24,7 +24,7 @@ interface Diff {
   lastSyncedAt: string;
 }
 
-interface PendingAction {
+export interface PendingAction {
   id: string;
   jobId: string;
   actionType: "approve_diff" | "reject_diff" | "comment" | "change_priority";
@@ -33,17 +33,28 @@ interface PendingAction {
   status: "pending" | "syncing" | "synced" | "failed";
 }
 
-const db = new Dexie("dopaCode") as Dexie & {
+export interface ChatMessage {
+  id: string;
+  sessionId: string;
+  role: string;
+  content: string;
+  timestamp: string;
+}
+
+const dbase = new Dexie("dopaCode") as Dexie & {
   jobs: EntityTable<Job, "id">;
   diffs: EntityTable<Diff, "id">;
   pendingActions: EntityTable<PendingAction, "id">;
+  messages: EntityTable<ChatMessage, "id">;
+  syncMeta: EntityTable<{ id: string; value: string }, "id">;
 };
 
-db.version(1).stores({
+dbase.version(2).stores({
   jobs: "id, status, updatedAt",
   diffs: "id, jobId, status, updatedAt",
   pendingActions: "id, jobId, status",
+  messages: "id, sessionId, timestamp",
+  syncMeta: "id",
 });
 
-export type { Job, Diff, PendingAction };
-export default db;
+export default dbase;

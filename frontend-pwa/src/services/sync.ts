@@ -4,10 +4,31 @@ const API_BASE = `${location.protocol}//${location.host}/api/v1`;
 
 export type { Job, Diff, PendingAction };
 
+// ── Sync Meta ──
+
+async function getLastSyncTs(): Promise<string | null> {
+  try {
+    const meta = await dbase.syncMeta.get("lastSyncTs");
+    return meta?.value || null;
+  } catch {
+    return null;
+  }
+}
+
+async function setLastSyncTs(ts: string) {
+  await dbase.syncMeta.put({ id: "lastSyncTs", value: ts });
+}
+
+// ── Incremental Sync ──
+
 export async function syncJobs(): Promise<Job[]> {
   try {
-    const res = await fetch(`${API_BASE}/jobs/`);
-    if (!res.ok) return [];
+    const lastTs = await getLastSyncTs();
+    const url = lastTs
+      ? `${API_BASE}/jobs/?since=${encodeURIComponent(lastTs)}`
+      : `${API_BASE}/jobs/`;
+    const res = await fetch(url);
+    if (!res.ok) return getLocalJobs();
     const data = await res.json();
     const jobs: Job[] = (data.jobs || []).map((j: Record<string, unknown>) => ({
       id: j.id as string,
@@ -21,7 +42,10 @@ export async function syncJobs(): Promise<Job[]> {
       profile: j.profile as string || "pro_mix",
       autonomyLevel: j.autonomy_level as string || "human_gatekeeper",
     }));
-    await dbase.jobs.bulkPut(jobs);
+    if (jobs.length > 0) {
+      await dbase.jobs.bulkPut(jobs);
+      await setLastSyncTs(jobs[0].updatedAt);
+    }
     return jobs;
   } catch {
     return [];
@@ -34,7 +58,11 @@ export function getLocalJobs(): Promise<Job[]> {
 
 export async function syncDiffs(jobId: string): Promise<Diff[]> {
   try {
-    const res = await fetch(`${API_BASE}/jobs/${jobId}/diffs`);
+    const lastTs = await getLastSyncTs();
+    const url = lastTs
+      ? `${API_BASE}/jobs/${jobId}/diffs?since=${encodeURIComponent(lastTs)}`
+      : `${API_BASE}/jobs/${jobId}/diffs`;
+    const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
     const diffs: Diff[] = (data.diffs || []).map((d: Record<string, unknown>) => ({
@@ -57,6 +85,19 @@ export function getLocalDiffs(jobId: string): Promise<Diff[]> {
   return dbase.diffs.where("jobId").equals(jobId).toArray();
 }
 
+// ── Actions (approve/reject) ──
+
+async function registerBgSync() {
+  try {
+    if ("serviceWorker" in navigator && navigator.serviceWorker.ready) {
+      const reg = await navigator.serviceWorker.ready;
+      if ("sync" in reg) {
+        await (reg as ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } }).sync.register("flush-pending");
+      }
+    }
+  } catch { /* SW not available */ }
+}
+
 export async function approveJob(jobId: string, deviceId = "pwa"): Promise<boolean> {
   const action: PendingAction = {
     id: crypto.randomUUID(),
@@ -70,8 +111,10 @@ export async function approveJob(jobId: string, deviceId = "pwa"): Promise<boole
   const online = navigator.onLine;
   if (online) {
     try {
-      const res = await fetch(`${API_BASE}/jobs/${jobId}/approve?device_id=${deviceId}`, {
+      const res = await fetch(`${API_BASE}/jobs/${jobId}/approve`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId }),
       });
       if (res.ok) {
         action.status = "synced";
@@ -79,11 +122,13 @@ export async function approveJob(jobId: string, deviceId = "pwa"): Promise<boole
         return true;
       }
     } catch {
-      // fall through to queue
+      // queue below
     }
   }
 
+  action.status = "pending";
   await dbase.pendingActions.put(action);
+  await registerBgSync();
   return false;
 }
 
@@ -100,8 +145,10 @@ export async function rejectJob(jobId: string, deviceId = "pwa"): Promise<boolea
   const online = navigator.onLine;
   if (online) {
     try {
-      const res = await fetch(`${API_BASE}/jobs/${jobId}/reject?device_id=${deviceId}`, {
+      const res = await fetch(`${API_BASE}/jobs/${jobId}/reject`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId }),
       });
       if (res.ok) {
         action.status = "synced";
@@ -109,11 +156,13 @@ export async function rejectJob(jobId: string, deviceId = "pwa"): Promise<boolea
         return true;
       }
     } catch {
-      // fall through to queue
+      // queue below
     }
   }
 
+  action.status = "pending";
   await dbase.pendingActions.put(action);
+  await registerBgSync();
   return false;
 }
 
@@ -143,4 +192,26 @@ export async function flushPendingActions(): Promise<number> {
   }
 
   return synced;
+}
+
+// ── Chat Messages Sync ──
+
+export async function saveMessage(sessionId: string, role: string, content: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await dbase.messages.put({
+    id,
+    sessionId,
+    role,
+    content,
+    timestamp: new Date().toISOString(),
+  });
+  return id;
+}
+
+export async function getMessages(sessionId: string, limit = 100) {
+  return dbase.messages
+    .where("sessionId").equals(sessionId)
+    .reverse()
+    .sortBy("timestamp")
+    .then(msgs => msgs.slice(-limit));
 }

@@ -40,3 +40,28 @@ self.addEventListener("fetch", (event: FetchEvent) => {
     })
   );
 });
+
+// ── Background Sync ──
+
+self.addEventListener("sync", (event) => {
+  if (event.tag === "flush-pending") {
+    event.waitUntil(flushPendingFromSW());
+  }
+});
+
+async function flushPendingFromSW() {
+  // The SW has no direct access to Dexie, so we ask clients to flush.
+  // The main thread listens for this message and calls flushPendingActions().
+  const clients = await self.clients.matchAll({ type: "window" });
+  for (const client of clients) {
+    client.postMessage({ type: "bg-sync", tag: "flush-pending" });
+  }
+}
+
+// ── Message Channel ──
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "skip-waiting") {
+    self.skipWaiting();
+  }
+});
