@@ -1,41 +1,60 @@
 """
-Agente-a-agente: comunicacion entre sesiones del Orchestrator.
+Comunicacion agente-a-agente para Dopa Code.
 
-Casos de uso:
-  1. Architect -> Builder: delegar ejecucion de un plan
-  2. Builder -> Reviewer: solicitar revision de diff
-  3. Architect -> Reviewer: consultar patrones en el codebase
-  4. Cualquier agente -> Human: solicitar aprobacion
-  5. Orchestrator -> Builder: spawner un builder para arreglar un bug
+Permite que el arquitecto delegue tareas al builder, el builder pida review,
+y el reviewer apruebe/rechace cambios. Los mensajes fluyen a traves de colas
+asyncio por sesion con persistencia en conversation_messages.
 
-Flujo:
-  Agente A (via API/PWA) -> POST /api/v1/agent-comm -> Inti
-  Inti -> WebSocket -> Agente B (notificacion)
-  Agente B -> procesa -> responde
+Formato de mensaje:
+    Architect → Builder: "implementa el plan de checkout"
+    Builder → Reviewer: "revisa este diff"
+    Reviewer → Architect: "QA: diff aprobado"
 """
 
+import asyncio
+import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Literal
 
-AgentCommType = Literal[
-    "delegate_task",
-    "request_review",
-    "query_codebase",
-    "request_approval",
-    "report_status",
-    "spawn_agent",
-]
+logger = logging.getLogger("inti.agent_comm")
+
+COMM_TEMPLATES = {
+    "delegate_task": {
+        "template": "Te delego la tarea: {task}. Plan: {plan}",
+        "description": "Delegar tarea de arquitecto a builder",
+    },
+    "request_review": {
+        "template": "Por favor revisa el diff del job {job_id}: {summary}",
+        "description": "Builder solicita revision del reviewer",
+    },
+    "query_codebase": {
+        "template": "Consulta sobre el codigo: {question}. Contexto: {context}",
+        "description": "Pregunta sobre patrones o arquitectura",
+    },
+    "request_approval": {
+        "template": "Solicito aprobacion para continuar con {step}. Detalles: {details}",
+        "description": "Agente solicita aprobacion humana",
+    },
+    "report_status": {
+        "template": "Estado de {job_id}: {status}. {details}",
+        "description": "Builder reporta estado al arquitecto",
+    },
+    "spawn_agent": {
+        "template": "Necesito un agente {role} para {task} con modelo {model}",
+        "description": "Solicita crear un nuevo agente",
+    },
+}
 
 
 @dataclass
 class AgentMessage:
     id: str
-    from_agent: str
-    from_role: str
+    from_agent: str | None
+    from_role: str | None
     to_agent: str | None
     to_role: str | None
-    comm_type: AgentCommType
+    comm_type: str
     content: str
     job_id: str | None = None
     metadata: dict = field(default_factory=dict)
@@ -52,7 +71,7 @@ class AgentMessage:
                 "from_role": self.from_role,
                 "to_agent": self.to_agent,
                 "to_role": self.to_role,
-                "comm_type": self.comm_type,
+                "type": self.comm_type,
                 "content": self.content,
                 "metadata": self.metadata,
             },
@@ -60,31 +79,21 @@ class AgentMessage:
         }
 
 
-COMM_TEMPLATES: dict[AgentCommType, str] = {
-    "delegate_task": "Ejecuta el siguiente plan sobre el workspace {workspace}:\n\n{plan}",
-    "request_review": "Revisa el diff del job {job_id}:\n\n{diff_summary}",
-    "query_codebase": "Busca en {workspace} informacion sobre: {query}",
-    "request_approval": "Solicito aprobacion para {action} en job {job_id}",
-    "report_status": "Estado de {agent}: {status}. Job actual: {job_id}",
-    "spawn_agent": "Crear agente {role} con modelo {model} para {reason}",
-}
-
-
 def build_agent_message(
-    from_agent: str,
-    from_role: str,
-    comm_type: AgentCommType,
+    comm_type: str,
+    from_agent: str | None = None,
+    from_role: str | None = None,
     to_agent: str | None = None,
     to_role: str | None = None,
     job_id: str | None = None,
+    metadata: dict | None = None,
     **kwargs,
 ) -> AgentMessage:
     import uuid
-    template = COMM_TEMPLATES.get(comm_type, "{content}")
+    template = COMM_TEMPLATES.get(comm_type, {}).get("template", "{content}")
     content = template.format(**kwargs)
-
     return AgentMessage(
-        id=uuid.uuid4().hex[:12],
+        id=f"msg-{uuid.uuid4().hex[:12]}",
         from_agent=from_agent,
         from_role=from_role,
         to_agent=to_agent,
@@ -92,5 +101,84 @@ def build_agent_message(
         comm_type=comm_type,
         content=content,
         job_id=job_id,
-        metadata=kwargs,
+        metadata=metadata or {},
     )
+
+
+class AgentCommBroker:
+    """Cola de mensajes agente-a-agente con persistencia."""
+
+    def __init__(self):
+        self._queues: dict[str, asyncio.Queue[AgentMessage]] = {}
+        self._emitters: list = []
+
+    def register_emitter(self, emitter):
+        self._emitters.append(emitter)
+
+    def get_queue(self, session_id: str) -> asyncio.Queue[AgentMessage]:
+        if session_id not in self._queues:
+            self._queues[session_id] = asyncio.Queue(maxsize=100)
+        return self._queues[session_id]
+
+    async def send_message(self, msg: AgentMessage) -> bool:
+        """Envia un mensaje a uno o mas destinatarios. Persiste en DB."""
+        delivered = False
+
+        # Persistir en conversation_messages
+        try:
+            from inti.database import async_session
+            from inti.models.conversation_message import ConversationMessage
+            async with async_session() as db:
+                db.add(ConversationMessage(
+                    session_id=msg.to_agent or "broadcast",
+                    role=msg.from_role or "system",
+                    content=f"[{msg.comm_type}] {msg.content}",
+                ))
+                await db.commit()
+        except Exception:
+            logger.warning("Failed to persist agent message", exc_info=True)
+
+        # Enviar a destinatario especifico
+        if msg.to_agent and msg.to_agent in self._queues:
+            try:
+                self._queues[msg.to_agent].put_nowait(msg)
+                delivered = True
+            except asyncio.QueueFull:
+                logger.warning(f"Queue full for session {msg.to_agent}")
+
+        # Broadcast a rol especifico
+        if msg.to_role:
+            from inti.orchestrator import orchestrator
+            sessions = orchestrator.list_sessions(role=msg.to_role)
+            for s in sessions:
+                if s.id in self._queues:
+                    try:
+                        self._queues[s.id].put_nowait(msg)
+                        delivered = True
+                    except asyncio.QueueFull:
+                        pass
+
+        # Emitir evento WebSocket para notificar
+        event = msg.to_event()
+        for emitter in self._emitters:
+            try:
+                await emitter(event)
+            except Exception:
+                pass
+
+        return delivered
+
+    async def receive_message(self, session_id: str) -> AgentMessage | None:
+        """Devuelve el siguiente mensaje para una sesion (non-blocking)."""
+        q = self.get_queue(session_id)
+        try:
+            return q.get_nowait()
+        except asyncio.QueueEmpty:
+            return None
+
+    def remove_session(self, session_id: str):
+        if session_id in self._queues:
+            del self._queues[session_id]
+
+
+broker = AgentCommBroker()

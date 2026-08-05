@@ -28,7 +28,7 @@ class PostMortem:
             if not job:
                 return {"error": "Job not found"}
 
-            summary = PostMortem._build_job_summary(job)
+            summary = await PostMortem._build_job_summary(job)
 
             lesson = ExperienceLesson(
                 job_id=job_id,
@@ -68,7 +68,70 @@ class PostMortem:
             }
 
     @staticmethod
-    def _build_job_summary(job: Job) -> dict:
+    async def _build_job_summary(job: Job) -> dict:
+        """Analiza un job completado usando LLM para extraer lecciones reales."""
+        # Cargar diff y mensajes para contexto
+        diff_text = ""
+        try:
+            from inti.models.diff import Diff
+            async with async_session() as s:
+                result = await s.execute(
+                    select(Diff).where(Diff.job_id == job.id).order_by(Diff.created_at.desc()).limit(1)
+                )
+                diff_rec = result.scalar_one_or_none()
+                if diff_rec and diff_rec.diff_text:
+                    diff_text = diff_rec.diff_text[:3000]
+        except Exception:
+            pass
+
+        # Llamar LLM para analisis
+        try:
+            from inti.openrouter_client import openrouter
+            prompt = f"""Analiza este job completado en Dopa Code. Responde SOLO con JSON valido (sin markdown, sin explicacion):
+
+{{
+  "positive": "que salio bien (1 oracion)",
+  "negative": "que salio mal o puede mejorar (1 oracion, o 'nada' si todo bien)",
+  "skill_hint": "nombre de skill a crear (max 50 chars, o null si no aplica)",
+  "confidence": 0.0-1.0,
+  "tags": ["tag1", "tag2"]
+}}
+
+Job:
+- Titulo: {job.title}
+- Perfil: {job.profile or 'general'}
+- Estado: {job.status}
+
+Diff (primeros 3000 chars):
+{diff_text or '(sin diff disponible)'}
+"""
+            resp = await openrouter.chat(
+                settings.loop_model,
+                [{"role": "user", "content": prompt}],
+                max_tokens=500,
+                temperature=0.3,
+            )
+            raw = resp.get("content", "")
+            # Extraer JSON de la respuesta
+            import re
+            match = re.search(r'\{[\s\S]*\}', raw)
+            if match:
+                parsed = json.loads(match.group())
+                return {
+                    "job_id": job.id,
+                    "title": job.title,
+                    "profile": job.profile,
+                    "status": job.status,
+                    "positive": parsed.get("positive", f"Job '{job.title}' completado."),
+                    "negative": parsed.get("negative", "Sin incidencias."),
+                    "skill_hint": parsed.get("skill_hint"),
+                    "confidence": float(parsed.get("confidence", 0.6)),
+                    "tags": parsed.get("tags", [job.profile, "postmortem"]),
+                }
+        except Exception as e:
+            logger.warning(f"LLM PostMortem failed, using static fallback: {e}")
+
+        # Fallback estatico si LLM falla
         return {
             "job_id": job.id,
             "title": job.title,

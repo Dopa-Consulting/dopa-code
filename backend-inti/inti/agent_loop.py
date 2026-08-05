@@ -179,7 +179,7 @@ _STREAMING_TOOLS = {"run_opencode", "generate_image"}
 
 
 class AgentLoop:
-    def __init__(self, workspace: str, model: str | None = None, project_id: str | None = None, profile: str | None = None, require_approval: bool = False, allowed_dirs: list[str] | None = None, use_heavy_model: bool = False):
+    def __init__(self, workspace: str, model: str | None = None, project_id: str | None = None, profile: str | None = None, require_approval: bool = False, allowed_dirs: list[str] | None = None, use_heavy_model: bool = False, tenant_id: str | None = None):
         self.workspace = Path(workspace).resolve()
         self.model = model or (settings.heavy_model if use_heavy_model else settings.loop_model)
         self.heavy_model = settings.heavy_model
@@ -189,6 +189,7 @@ class AgentLoop:
         self.require_approval = require_approval
         self.max_iterations = settings.max_iterations
         self.allowed_dirs = [Path(d).resolve() for d in (allowed_dirs or []) if Path(d).is_dir()]
+        self.tenant_id = tenant_id
 
     def _strip_tool_text(self, content: str) -> str:
         """Remueve JSON/XML de tool calls del texto visible."""
@@ -697,6 +698,16 @@ class AgentLoop:
                 system_content = system_content + "\n\n" + mem
         except Exception:
             pass
+
+        # Inyectar contexto ERP si hay tenant_id (Dopa CRM/DopaWeb)
+        if self.tenant_id:
+            try:
+                from inti.erp_context import erp_context as ec
+                ctx = await ec.build_prompt_context(self.tenant_id)
+                if ctx:
+                    system_content = system_content + "\n\n" + ctx
+            except Exception:
+                pass
 
         messages = [
             {"role": "system", "content": system_content},
