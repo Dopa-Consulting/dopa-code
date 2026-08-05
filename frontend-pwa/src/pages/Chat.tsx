@@ -4,15 +4,18 @@ import useWebSocket from "../hooks/useWebSocket";
 const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 
 function renderMd(text: string): string {
-  // No escapar &lt;/&gt; primero — el contenido ya puede venir escapado del backend
-  let html = text
-    .replace(/&(?!amp;|lt;|gt;|quot;|#\d+;|#x[0-9a-fA-F]+;)/g, "&amp;")
-    // Headers
+  // Sanitizacion: escapar cualquier HTML inyectable en el texto original
+  let safe = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  // Headers (la regex captura texto ya escapado)
+  let html = safe
     .replace(/^#### (.+)$/gm, "<h4 class='text-sm font-semibold text-slate-200 mt-3 mb-1'>$1</h4>")
     .replace(/^### (.+)$/gm, "<h3 class='text-base font-semibold text-slate-100 mt-3 mb-1'>$1</h3>")
     .replace(/^## (.+)$/gm, "<h2 class='text-lg font-bold text-white mt-4 mb-2'>$1</h2>")
     .replace(/^# (.+)$/gm, "<h1 class='text-xl font-bold text-amber-300 mt-4 mb-2'>$1</h1>")
-    // Code blocks
+    // Code blocks (contenido ya escapado)
     .replace(/```(\w*)\n([\s\S]*?)```/g, "<pre class='bg-slate-950 border border-slate-700 rounded p-2 my-1 overflow-x-auto text-xs'><code>$2</code></pre>")
     // Inline code
     .replace(/`([^`]+)`/g, "<code class='bg-slate-700 px-1 rounded text-xs text-cyan-300'>$1</code>")
@@ -22,13 +25,18 @@ function renderMd(text: string): string {
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     // Strikethrough
     .replace(/~~(.+?)~~/g, "<del>$1</del>")
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' class='text-amber-400 underline' target='_blank'>$1</a>")
+    // Links (sanitizar href: solo http/https)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m: string, label: string, href: string) => {
+      if (/^(https?:|\/|\.)/i.test(href)) {
+        return `<a href='${href}' class='text-amber-400 underline' target='_blank' rel='noopener noreferrer'>${label}</a>`;
+      }
+      return label;
+    })
     // Horizontal rules
     .replace(/^---$/gm, "<hr class='border-slate-700 my-2'>")
     // Unordered lists
     .replace(/^- (.+)$/gm, "<li class='text-slate-300 text-sm ml-4'>$1</li>")
-    // Blockquotes
+    // Blockquotes (&gt; viene escapado del paso 1)
     .replace(/^&gt; (.+)$/gm, "<blockquote class='border-l-2 border-amber-500 pl-3 italic text-slate-400 text-sm my-2'>$1</blockquote>");
 
   // Tables: parse markdown tables into HTML
@@ -36,7 +44,7 @@ function renderMd(text: string): string {
     const lines = match.trim().split("\n").filter(l => l.includes("|"));
     if (lines.length < 2) return match;
     const headerCells = lines[0].split("|").filter(c => c.trim());
-    const bodyLines = lines.slice(2); // skip header + separator
+    const bodyLines = lines.slice(2);
     let table = "<table class='w-full text-xs border-collapse my-2'><thead><tr class='bg-slate-800'>";
     for (const cell of headerCells) {
       table += `<th class='border border-slate-700 px-2 py-1 text-left text-slate-200'>${cell.trim()}</th>`;

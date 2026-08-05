@@ -566,7 +566,7 @@ class AgentLoop:
         import httpx
 
         BRIDGE_URL = "http://localhost:4097"
-        BRIDGE_TOKEN = "dopa-bridge-local-dev"
+        BRIDGE_TOKEN = settings.bridge_token or "dopa-bridge-local-dev"
 
         collected: list[str] = []
         await emit({
