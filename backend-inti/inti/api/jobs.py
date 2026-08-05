@@ -318,3 +318,45 @@ async def set_deploy_token(
         endpoint=endpoint,
     )
     return result
+
+
+@router.post("/{job_id}/execute-graph")
+async def execute_graph(job_id: str, workspace_path: str = ""):
+    """Ejecuta el pipeline completo via LangGraph FSM (planner → executor → QA paralelo)."""
+    from inti.database import async_session
+    from sqlalchemy import select
+    from inti.models.job import Job
+
+    async with async_session() as db:
+        result = await db.execute(select(Job).where(Job.id == job_id))
+        job = result.scalar_one_or_none()
+        if not job:
+            return {"error": "Job not found"}
+
+        from inti.langgraph_fsm import build_dopa_code_graph, GraphState
+        graph = build_dopa_code_graph()
+        state: GraphState = {
+            "job_id": job.id,
+            "title": job.title,
+            "description": job.description or "",
+            "profile": job.profile or "general",
+            "autonomy_level": "human_gatekeeper",
+            "branch_name": "feature/intl",
+            "plan": None,
+            "execution_result": None,
+            "qa_security": None,
+            "qa_performance": None,
+            "qa_ux": None,
+            "qa_aggregated": None,
+            "requires_human": True,
+            "human_decision": None,
+            "deploy_result": None,
+            "current_step": "start",
+            "errors": [],
+            "audit_trail": [],
+        }
+        if workspace_path:
+            state["workspace_path"] = workspace_path  # type: ignore[typeddict-item]
+
+        result_state = await graph.invoke(state)
+        return {"status": "completed", "step": result_state["current_step"], "plan": result_state.get("plan"), "execution": result_state.get("execution_result"), "qa": result_state.get("qa_aggregated")}

@@ -25,15 +25,18 @@ async def begin_registration(
 
 @router.post("/register/complete")
 async def complete_registration(
-    challenge: str,
-    credential_id: str,
-    public_key: str,
+    raw_id: str = "",
+    client_data_json: str = "",
+    attestation_object: str = "",
+    credential_id: str = "",
+    public_key: str = "",
+    user_id: str = "local",
     device_name: str = "PWA",
     db: AsyncSession = Depends(get_db),
 ):
-    result = webauthn.verify_registration(challenge, credential_id, public_key)
-    if not result["verified"]:
-        return result
+    result = webauthn.verify_registration(raw_id, client_data_json, attestation_object, credential_id, public_key)
+    if not result or not result.get("verified"):
+        return {"verified": False, "error": "Challenge verification failed"}
 
     device = Device(
         user_id=result["user_id"],
@@ -56,7 +59,7 @@ async def complete_registration(
     return {
         "verified": True,
         "device_id": device.id,
-        "credential_id": credential_id,
+        "credential_id": result["credential_id"],
     }
 
 
@@ -88,14 +91,17 @@ async def begin_authentication(
 
 @router.post("/authenticate/complete")
 async def complete_authentication(
-    challenge: str,
-    credential_id: str,
+    raw_id: str = "",
+    client_data_json: str = "",
+    authenticator_data: str = "",
+    signature: str = "",
+    credential_id: str = "",
     user_id: str = "local",
     db: AsyncSession = Depends(get_db),
 ):
-    result = webauthn.verify_assertion(challenge, credential_id, user_id)
-    if not result["verified"]:
-        return result
+    result = webauthn.verify_assertion(raw_id, client_data_json, authenticator_data, signature, credential_id, user_id)
+    if not result or not result.get("verified"):
+        return {"verified": False, "error": "Assertion verification failed"}
 
     result_device = await db.execute(
         select(Device).where(Device.user_id == user_id)
