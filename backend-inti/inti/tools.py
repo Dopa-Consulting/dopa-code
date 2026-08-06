@@ -145,7 +145,7 @@ async def _git_diff(args: dict, workspace: Path) -> str:
 async def _run_opencode(args: dict, workspace: Path) -> str:
     from inti.config import settings
     import httpx
-    from inti.agent_loop import BRIDGE_URL
+    BRIDGE_URL = "http://localhost:4097"
     task = args.get("task", "")
     try:
         async with httpx.AsyncClient(timeout=180.0) as client:
