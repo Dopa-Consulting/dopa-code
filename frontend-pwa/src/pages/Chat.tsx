@@ -92,18 +92,18 @@ const TOOL_META: Record<string, { icon: string; verb: string }> = {
   recall_memory: { icon: "🧠", verb: "Recordando" },
 };
 
-const WELCOME: Message = {
-  id: "welcome", role: "intl",
-  content: (() => {
-    const ws = localStorage.getItem("dopa-workspace") || "default";
-    const st = localStorage.getItem("dopa-session-title");
-    return st ? `**${st}**\nWorkspace: \`${ws}\`` : `**Dopa Code** - Inti\nWorkspace: \`${ws}\`\n\nEscribe \`Hola\` o una tarea como \`Crea landing page\` para empezar.`;
-  })(),
-  timestamp: new Date().toISOString(),
-};
+function getWelcome(): Message {
+  const ws = localStorage.getItem("dopa-workspace") || "default";
+  const st = localStorage.getItem("dopa-session-title");
+  return {
+    id: "welcome", role: "intl" as const,
+    content: st ? `**${st}**\nWorkspace: \`${ws}\`` : `**Dopa Code** - Inti\nWorkspace: \`${ws}\`\n\nEscribe \`Hola\` o una tarea como \`Crea landing page\` para empezar.`,
+    timestamp: new Date().toISOString(),
+  };
+}
 
 function loadMsgs(): Message[] {
-  try { const s = localStorage.getItem("dopa-chat"); return s ? JSON.parse(s) : [WELCOME]; } catch { return [WELCOME]; }
+  try { const s = localStorage.getItem("dopa-chat"); return s ? JSON.parse(s) : [getWelcome()]; } catch { return [getWelcome()]; }
 }
 function saveMsgs(msgs: Message[]) {
   try { localStorage.setItem("dopa-chat", JSON.stringify(msgs.slice(-50))); } catch {}
@@ -148,7 +148,7 @@ export default function Chat() {
       if (et === "chat_history") {
         const historyMsgs = (e.payload as Record<string,unknown>)?.messages as Array<{role:string,content:string}> | undefined;
         if (historyMsgs && historyMsgs.length > 0 && messages.length <= 1) {
-          const loaded: Message[] = [WELCOME];
+          const loaded: Message[] = [getWelcome()];
           for (const hm of historyMsgs) {
             loaded.push({
               id: crypto.randomUUID(),
@@ -336,7 +336,7 @@ export default function Chat() {
   return (
     <div className="flex flex-col h-[calc(100dvh-120px)]">
       <div className="flex items-center justify-between mb-3">
-        <button onClick={() => { setMessages([WELCOME]); setClickedJobs(new Set()); localStorage.removeItem("dopa-chat"); localStorage.removeItem("dopa-session-id"); send({ type: "chat", content: "", new_session: true }); }}
+        <button onClick={() => { setMessages([getWelcome()]); setClickedJobs(new Set()); localStorage.removeItem("dopa-chat"); localStorage.removeItem("dopa-session-id"); send({ type: "chat", content: "", new_session: true }); }}
           className="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
           title="Nuevo chat">
           + Nuevo

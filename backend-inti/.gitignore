@@ -1,40 +1,31 @@
-# === Memoria de Inti (NUNCA subir — contiene datos personales, IPs, perfiles) ===
-dopa_code.db
-dopa_code.db-shm
-dopa_code.db-wal
+# Entornos virtuales
+venv/
+.venv/
+
+# Archivos de configuración local
+.env
+private/
+
+# Archivos de IDE
+.idea/
+.vscode/
+
+# Archivos generados
+__pycache__/
+*.py[cod]
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Logs y bases de datos locales
+*.log
+*.sqlite
 *.db
 *.db-shm
 *.db-wal
-*.sqlite
-*.sqlite3
 
-# === Secretos ===
-.env
-.env.*
-!.env.example
-*.key
-*.pem
-secrets/
-
-# === Perfiles / datos privados del usuario ===
-*-profile.md
-private/
-memory_dumps/
-
-# === Python ===
-__pycache__/
-*.py[cod]
-*.egg-info/
+# Archivos de pruebas
 .pytest_cache/
-venv/
-.venv/
-env/
-
-# === Build ===
-build/
-dist/
-*.spec
-
-# === Generados ===
-*.png
-!landing/**/*.png

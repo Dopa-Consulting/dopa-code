@@ -23,12 +23,14 @@
 - 🛠️ **Multi-herramienta** — Edición de archivos, terminal integrada y control de git en una sola interfaz.
 - 🤖 **Delegación inteligente** — Las tareas grandes multi-archivo se delegan a OpenCode.
 
-## 🚀 Cómo funciona
+## 🚀 Estructura del proyecto
 
-1. **Describe tu tarea** en lenguaje natural.
-2. **Inti planifica** e inspecciona tu proyecto.
-3. **Ejecuta local** — lee, escribe archivos y corre comandos en tu máquina.
-4. **Verifica y entrega** — revisa los cambios con git antes de confirmar.
+El código está organizado en los siguientes directorios:
+
+- **`core/`**: Lógica central del agente, políticas de seguridad y memoria.
+- **`api/`**: Servicios HTTP, clientes externos y autenticación.
+- **`utils/`**: Configuración, base de datos, eventos y herramientas de auditoría.
+- **`models/`**: Esquemas de datos y tipos compartidos.
 
 ## 🏁 Empezar
 
