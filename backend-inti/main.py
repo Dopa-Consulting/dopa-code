@@ -1,9 +1,11 @@
+import asyncio
 import json
 import sys
 import subprocess
+import time
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -60,6 +62,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Rate limiter simple (en memoria) ──
+RATE_LIMITS: dict[str, list[float]] = {}
+RATE_MAX_REQUESTS = 30   # por ventana
+RATE_WINDOW = 60          # segundos
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/health") or path.startswith("/assets"):
+        return await call_next(request)
+    key = request.cookies.get("dopa_token") or request.client.host or "anon"
+    now = time.time()
+    window = [t for t in RATE_LIMITS.get(key, []) if now - t < RATE_WINDOW]
+    if len(window) >= RATE_MAX_REQUESTS:
+        return JSONResponse({"error": "Rate limit exceeded", "retry_after": RATE_WINDOW}, status_code=429)
+    window.append(now)
+    RATE_LIMITS[key] = window
+    return await call_next(request)
 
 # Auth middleware: protege solo si hay token configurado
 # Si no hay token, todo es publico (dev mode). Si hay, requiere auth.
@@ -204,7 +225,19 @@ async def websocket_endpoint(websocket: WebSocket):
                 require_approval=data.get("require_approval", data.get("profile") is not None),
                 allowed_dirs=data.get("allowed_dirs"),
             )
-            await loop.run(content, emit=emit, history=merged_history)
+            if settings.loop_timeout > 0:
+                try:
+                    await asyncio.wait_for(
+                        loop.run(content, emit=emit, history=merged_history),
+                        timeout=settings.loop_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    await emit({
+                        "event_type": "error",
+                        "payload": {"error": f"Timeout: el agente excedio {settings.loop_timeout}s"},
+                    })
+            else:
+                await loop.run(content, emit=emit, history=merged_history)
 
             history.append({"role": "user", "content": content})
             if final_reply["content"]:

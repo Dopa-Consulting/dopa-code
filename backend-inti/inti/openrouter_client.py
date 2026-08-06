@@ -315,6 +315,61 @@ class OpenRouterClient:
     def is_configured(self) -> bool:
         return bool(self.api_key) and not self.api_key.endswith("...")
 
+    async def get_models(self, force: bool = False) -> list[dict]:
+        """Obtiene catalogo de modelos de OpenRouter con cache TTL 24h."""
+        cache_key = "openrouter_models_cache"
+        if not force:
+            try:
+                from inti.database import async_session
+                from inti.models.project_knowledge import ProjectKnowledge
+                from sqlalchemy import select
+                async with async_session() as db:
+                    result = await db.execute(
+                        select(ProjectKnowledge).where(ProjectKnowledge.key == cache_key)
+                    )
+                    cached = result.scalar_one_or_none()
+                    if cached:
+                        import json
+                        data = json.loads(cached.value or "{}")
+                        import time
+                        if time.time() - data.get("ts", 0) < 86400:  # 24h TTL
+                            return data.get("models", [])
+            except Exception:
+                pass
+
+        # Fetch from API
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/models",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                )
+                if resp.status_code == 200:
+                    models = resp.json().get("data", [])
+                    # Cache in DB
+                    try:
+                        from inti.database import async_session
+                        from inti.models.project_knowledge import ProjectKnowledge
+                        from sqlalchemy import select
+                        import json, time
+                        async with async_session() as db:
+                            result = await db.execute(
+                                select(ProjectKnowledge).where(ProjectKnowledge.key == cache_key)
+                            )
+                            entry = result.scalar_one_or_none()
+                            value = json.dumps({"ts": time.time(), "models": models})
+                            if entry:
+                                entry.value = value
+                            else:
+                                db.add(ProjectKnowledge(project_id="dopa", key=cache_key, value=value))
+                            await db.commit()
+                    except Exception:
+                        pass
+                    return models
+        except Exception:
+            pass
+        return []
+
     def get_headers(self) -> dict:
         return {
             "Authorization": f"Bearer {self.api_key}",

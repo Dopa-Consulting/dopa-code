@@ -10,171 +10,16 @@ from typing import Callable, Awaitable
 from inti.openrouter_client import openrouter
 from inti.config import settings
 from inti.guardrails import guardrail_engine
+from inti.tools import registry as tool_registry, register_builtin_tools
 
-SYSTEM_PROMPT = """Tu nombre es Inti. Eres el agente de Dopa Code. Español neutro LATAM (tú, nunca vos). Ante comandos de acción (audita, crea, analiza, revisa, escribe, modifica) SIEMPRE usas herramientas. NUNCA respondas solo con texto a un comando de acción.
+# System prompt cargado desde archivo externo (versionable, A/B test)
+_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "system.md"
+if _PROMPT_PATH.exists():
+    SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
+else:
+    SYSTEM_PROMPT = """Tu nombre es Inti. Eres el agente de Dopa Code. Español neutro LATAM (tú, nunca vos). Ante comandos de acción SIEMPRE usas herramientas."""
 
-## Formato de herramientas
-Para llamar herramientas:
-<tool_calls>
-<invoke name="list_dir">
-<parameter name="path" string="true">inti/</parameter>
-</invoke>
-</tool_calls>
-
-SIEMPRE usa este formato. No describas lo que harás — HAZLO.
-
-Herramientas: read_file(path), write_file(path,content), list_dir(path), run_command(command), git_diff(), run_opencode(task), recall_memory(key), save_memory(key,value), web_fetch(url), generate_image(prompt)
-
-Varias a la vez dentro de <tool_calls>:
-<tool_calls>
-<invoke name="read_file"><parameter name="path" string="true">x.py</parameter></invoke>
-<invoke name="list_dir"><parameter name="path" string="true">src</parameter></invoke>
-</tool_calls>
-
-## Contexto
-Dopa Code entorno local. Windows (NO WSL). Prefiere read_file/list_dir sobre comandos shell (grep/cat/sed no existen). Ecosistema: DopaCRM, Dopa Commerce. Diseño: dark #0B0E11, gradiente #00E9D9→#6900FF, tipografía Geist. Sin glassmorphism ni emojis.
-"""
-
-TOOL_SCHEMAS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "read_file",
-            "description": "Lee el contenido de un archivo",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Ruta relativa al archivo"}
-                },
-                "required": ["path"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "write_file",
-            "description": "Escribe contenido en un archivo (lo crea si no existe, lo sobrescribe si existe)",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Ruta relativa al archivo"},
-                    "content": {"type": "string", "description": "Contenido a escribir"}
-                },
-                "required": ["path", "content"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_dir",
-            "description": "Lista el contenido de un directorio",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Ruta relativa al directorio"}
-                },
-                "required": ["path"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_command",
-            "description": "Ejecuta un comando en la terminal dentro del workspace",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "command": {"type": "string", "description": "Comando a ejecutar"}
-                },
-                "required": ["command"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "git_diff",
-            "description": "Muestra los cambios actuales en el repositorio (git diff)",
-            "parameters": {
-                "type": "object",
-                "properties": {}
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_opencode",
-            "description": (
-                "Delega una tarea de código pesada o multi-archivo al agente OpenCode. "
-                "Úsala para construir features/proyectos completos, NO para ediciones "
-                "puntuales (para eso usa write_file/read_file)."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task": {"type": "string", "description": "Descripción de la tarea a delegar a OpenCode"}
-                },
-                "required": ["task"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "recall_memory",
-            "description": (
-                "Recupera skills, lecciones previas y conocimiento del proyecto relevantes. "
-                "Úsala antes de tareas grandes para no repetir errores."
-            ),
-            "parameters": {"type": "object", "properties": {}}
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "generate_image",
-            "description": (
-                "Genera una imagen usando IA (Nano Banana de Gemini). "
-                "Guarda el PNG en el workspace. Ideal para landing pages, banners, "
-                "portadas de README, o cualquier recurso visual."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "prompt": {"type": "string", "description": "Descripcion de la imagen a generar"},
-                    "filename": {"type": "string", "description": "Nombre del archivo PNG (ej: portada.png)"},
-                },
-                "required": ["prompt", "filename"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "web_fetch",
-            "description": (
-                "Descarga una URL de internet y devuelve su contenido en texto "
-                "(HTML convertido a texto plano; JSON/texto tal cual). Úsala para "
-                "leer documentación viva, validar catálogos de APIs (p.ej. los "
-                "modelos de OpenRouter en https://openrouter.ai/api/v1/models), o "
-                "consultar cualquier recurso web."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "URL completa (https://...) a descargar"},
-                },
-                "required": ["url"]
-            }
-        }
-    },
-]
-
-# Tools que streamean su propio progreso (NO deben ser envueltas por el loop)
+# Streaming tools: names que manejan su propio framing
 _STREAMING_TOOLS = {"run_opencode", "generate_image"}
 
 
@@ -190,6 +35,13 @@ class AgentLoop:
         self.max_iterations = settings.max_iterations
         self.allowed_dirs = [Path(d).resolve() for d in (allowed_dirs or []) if Path(d).is_dir()]
         self.tenant_id = tenant_id
+        # Registrar tools si no estan ya
+        if not tool_registry.names():
+            register_builtin_tools(
+                self.workspace,
+                self._resolve_path,
+                self._check_guardrails,
+            )
 
     def _strip_tool_text(self, content: str) -> str:
         """Remueve JSON/XML de tool calls del texto visible."""
@@ -260,7 +112,11 @@ class AgentLoop:
         return None, content
 
     def _resolve_path(self, path: str) -> Path:
-        """Resuelve una ruta relativa al workspace. Permite allowed_dirs."""
+        """Resuelve una ruta relativa al workspace y verifica que no escape.
+
+        Usa is_relative_to (no startswith) para que un directorio hermano con
+        prefijo común — p.ej. workspace `.../ws` y ruta `../ws-evil/x` — NO pase
+        el check por coincidencia de string. Tambien permite allowed_dirs."""
         resolved = (self.workspace / path).resolve()
         if resolved != self.workspace and not resolved.is_relative_to(self.workspace):
             for ad in self.allowed_dirs:
@@ -312,19 +168,6 @@ class AgentLoop:
             return await self._chat(messages, tools)
         except Exception as e:
             return {"error": f"OpenRouter _chat failed: {str(e)}"}
-        """Resuelve una ruta relativa al workspace y verifica que no escape.
-
-        Usa is_relative_to (no startswith) para que un directorio hermano con
-        prefijo común — p.ej. workspace `.../ws` y ruta `../ws-evil/x` — NO pase
-        el check por coincidencia de string.
-        """
-        resolved = (self.workspace / path).resolve()
-        if resolved != self.workspace and not resolved.is_relative_to(self.workspace):
-            for ad in self.allowed_dirs:
-                if resolved == ad or resolved.is_relative_to(ad):
-                    return resolved
-            raise ValueError(f"Ruta fuera del workspace: {path}")
-        return resolved
 
     def _check_guardrails(self, files_changed: list[str], diff_text: str) -> str | None:
         """Ejecuta el gate de guardrails. Devuelve None si pasa, o string de bloqueo."""
@@ -342,106 +185,8 @@ class AgentLoop:
         args: dict,
         emit: Callable[[dict], Awaitable[None]] | None = None,
     ) -> str:
-        """Ejecuta una herramienta y devuelve el resultado como string.
-
-        Si la herramienta streamea (ej. run_opencode), usa `emit` para enviar
-        eventos step.start/step.delta/step.stop internamente.
-        """
-        try:
-            if name == "read_file":
-                path = self._resolve_path(args["path"])
-                if path.is_dir():
-                    items = sorted(p.name for p in path.iterdir())
-                    return f"'{args['path']}' es un directorio, no un archivo. Contenido:\n" + ("\n".join(items) if items else "(directorio vacío)")
-                if not path.is_file():
-                    if "schemas" in args["path"] or "tools/" in args["path"]:
-                        return "Error: no existe tools/schemas.py. Las tools estan en inti/agent_loop.py (TOOL_SCHEMAS). Usa read_file con path=ini/agent_loop.py."
-                    return f"Error: el archivo no existe: {args['path']}"
-                return path.read_text(encoding="utf-8")
-
-            elif name == "write_file":
-                path = self._resolve_path(args["path"])
-
-                # Gate de guardrails ANTES de escribir
-                block = self._check_guardrails([args["path"]], args["content"])
-                if block:
-                    return block
-
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(args["content"], encoding="utf-8")
-                return f"Archivo escrito: {args['path']} ({len(args['content'])} caracteres)"
-
-            elif name == "list_dir":
-                path = self._resolve_path(args["path"])
-                if not path.is_dir():
-                    return f"Error: el directorio no existe: {args['path']}"
-                items = sorted(p.name for p in path.iterdir())
-                return "\n".join(items) if items else "(directorio vacío)"
-
-            elif name == "run_command":
-                # Validar comando contra whitelist de politicas
-                from inti.policies import is_command_allowed
-                cmd_parts = args["command"].split()
-                if cmd_parts and not is_command_allowed(cmd_parts[0], cmd_parts[1:]):
-                    return f"BLOQUEADO por politicas: '{cmd_parts[0]}' no esta en la whitelist de comandos permitidos"
-                timeout_s = getattr(settings, "run_command_timeout", 120)
-                try:
-                    result = await asyncio.to_thread(
-                        subprocess.run,
-                        args["command"],
-                        shell=True,
-                        cwd=str(self.workspace),
-                        capture_output=True,
-                        text=True,
-                        timeout=timeout_s,
-                    )
-                except subprocess.TimeoutExpired:
-                    return f"Error: el comando excedió el tiempo límite ({timeout_s}s)"
-                output = result.stdout or ""
-                if result.stderr:
-                    output += "\n[stderr]\n" + result.stderr
-                return output.strip() or "(sin salida)"
-
-            elif name == "git_diff":
-                try:
-                    result = await asyncio.to_thread(
-                        subprocess.run,
-                        ["git", "diff"],
-                        cwd=str(self.workspace),
-                        capture_output=True,
-                        text=True,
-                        timeout=15,
-                    )
-                except subprocess.TimeoutExpired:
-                    return "Error: git diff excedió el tiempo límite (15s)"
-                return (result.stdout or "").strip() or "(sin cambios)"
-
-            elif name == "run_opencode":
-                if emit is None:
-                    return "Error: run_opencode requiere emit"
-                return await self._run_opencode(args["task"], emit)
-
-            elif name == "recall_memory":
-                from inti.memory import MemoryContext
-                return await MemoryContext.get_context_for_job(
-                    self.project_id, self.profile or "general", limit=5)
-
-            elif name == "save_memory":
-                return await self._save_memory(args)
-
-            elif name == "generate_image":
-                return await self._generate_image(args, emit)
-
-            elif name == "web_fetch":
-                return await self._web_fetch(args)
-
-            else:
-                return f"Error: herramienta desconocida: {name}"
-
-        except ValueError as e:
-            return f"Error: {e}"
-        except Exception as e:
-            return f"Error ejecutando {name}: {type(e).__name__}: {e}"
+        """Ejecuta una herramienta via el ToolRegistry."""
+        return await tool_registry.execute(name, args, emit=emit)
 
     async def _save_memory(self, args: dict) -> str:
         """Guarda informacion en ProjectKnowledge (persistente entre sesiones)."""
@@ -726,7 +471,7 @@ class AgentLoop:
             })
             # Routing: DeepSeek directo (sin OpenRouter markup) o OpenRouter
             try:
-                resp = await self._chat_stream(emit, messages, TOOL_SCHEMAS)
+                resp = await self._chat_stream(emit, messages, tool_registry.schemas())
             except Exception as chat_err:
                     await emit({
                         "event_type": "error",

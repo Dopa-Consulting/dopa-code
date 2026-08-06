@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
     voice_enabled: bool = False
 
+    # Timeout global del AgentLoop (segundos). 0 = sin limite.
+    loop_timeout: int = 600
+
     model_config = {"env_prefix": "DOPA_", "env_file": ".env", "extra": "ignore"}
 
     @model_validator(mode="after")
