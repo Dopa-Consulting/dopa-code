@@ -494,10 +494,39 @@ function DirsAdicionales() {
 function MicButton({ onTranscript }: { onTranscript: (t: string) => void }) {
   const [recording, setRecording] = useState(false);
   const [unsupported, setUnsupported] = useState(false);
+  const [error, setError] = useState("");
   const mediaRef = useRef<MediaRecorder | null>(null);
+  const srRef = useRef<unknown>(null);
+
+  const tryWebSpeech = useCallback(() => {
+    try {
+      const SRClass = (window as unknown as Record<string,unknown>).SpeechRecognition
+        || (window as unknown as Record<string,unknown>).webkitSpeechRecognition;
+      if (!SRClass) { setUnsupported(true); setError("Voz no soportada en este navegador"); return; }
+      const sr = new (SRClass as { new(): { lang: string; continuous: boolean; interimResults: boolean; onresult: ((e: Record<string,unknown>) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void; stop: () => void } })();
+      sr.lang = "es-PE";
+      sr.continuous = false;
+      sr.interimResults = false;
+      sr.onresult = (e: Record<string,unknown>) => {
+        const r = e as unknown as { results: Array<Array<{ transcript: string }>> };
+        if (r.results?.[0]?.[0]?.transcript) {
+          onTranscript(r.results[0][0].transcript);
+        }
+      };
+      sr.onerror = () => { setRecording(false); setError("Error de reconocimiento de voz"); };
+      sr.onend = () => setRecording(false);
+      sr.start();
+      setRecording(true);
+      srRef.current = sr;
+      setError("");
+    } catch {
+      setUnsupported(true); setError("Voz no disponible");
+    }
+  }, [onTranscript]);
 
   const startRecording = useCallback(async () => {
-    // Intentar MediaRecorder primero (para enviar audio al backend)
+    setError("");
+    // Intentar MediaRecorder + backend STT
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
@@ -511,56 +540,48 @@ function MicButton({ onTranscript }: { onTranscript: (t: string) => void }) {
         try {
           const res = await fetch("/api/v1/voice/transcribe", { method: "POST", body: form });
           const data = await res.json();
-          if (data.transcript) onTranscript(data.transcript);
-        } catch { /* fallback below */ }
+          if (data.transcript) { onTranscript(data.transcript); return; }
+        } catch { /* STT fallo */ }
+        // Fallback a Web Speech si STT fallo o no hay key
+        tryWebSpeech();
       };
       recorder.start();
       mediaRef.current = recorder;
       setRecording(true);
     } catch {
-      // Fallback: Web Speech API (gratis, local, sin backend)
-      try {
-        const SpeechRecognition = (window as unknown as Record<string,unknown>).webkitSpeechRecognition as { new(): { lang: string; onresult: (e: { results: { transcript: string }[][] }) => void; onerror: () => void; onend: () => void; start: () => void; stop: () => void } } | undefined;
-        if (!SpeechRecognition) { setUnsupported(true); return; }
-        const sr = new SpeechRecognition();
-        sr.lang = "es-PE";
-        sr.onresult = (e: { results: { transcript: string }[][] }) => {
-          const t = e.results[0][0].transcript;
-          onTranscript(t);
-        };
-        sr.onerror = () => setRecording(false);
-        sr.onend = () => setRecording(false);
-        sr.start();
-        setRecording(true);
-        (mediaRef as React.MutableRefObject<unknown>).current = sr;
-      } catch {
-        setUnsupported(true);
-      }
+      // getUserMedia fallo → ir directo a Web Speech
+      tryWebSpeech();
     }
-  }, [onTranscript]);
+  }, [onTranscript, tryWebSpeech]);
 
   const stopRecording = useCallback(() => {
     setRecording(false);
-    if (mediaRef.current) {
-      try { (mediaRef.current as MediaRecorder).stop(); } catch { try { (mediaRef.current as { stop: () => void }).stop(); } catch {} }
+    if (mediaRef.current && mediaRef.current.state !== "inactive") {
+      try { mediaRef.current.stop(); } catch {}
+    }
+    if (srRef.current) {
+      try { (srRef.current as { stop: () => void }).stop(); } catch {}
     }
   }, []);
 
-  if (unsupported) return null;
+  if (unsupported && !recording) return null;
 
   return (
-    <button
-      onMouseDown={startRecording}
-      onMouseUp={stopRecording}
-      onMouseLeave={stopRecording}
-      onTouchStart={startRecording}
-      onTouchEnd={stopRecording}
-      className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
-        recording ? "bg-red-500 text-white animate-pulse" : "bg-slate-700 hover:bg-slate-600 text-slate-300"
-      }`}
-      title="Mantener presionado para grabar (voz)"
-    >
-      {recording ? "... " : "\uD83C\uDF99"}
-    </button>
+    <div className="relative">
+      <button
+        onMouseDown={startRecording}
+        onMouseUp={stopRecording}
+        onMouseLeave={stopRecording}
+        onTouchStart={startRecording}
+        onTouchEnd={stopRecording}
+        className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
+          recording ? "bg-red-500 text-white animate-pulse" : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+        }`}
+        title="Mantener presionado para grabar (voz)"
+      >
+        {recording ? "... " : "\uD83C\uDF99"}
+      </button>
+      {error && <div className="absolute top-full left-0 mt-1 text-xs text-red-400 whitespace-nowrap bg-slate-900 px-2 py-0.5 rounded">{error}</div>}
+    </div>
   );
 }
