@@ -15,6 +15,7 @@ from inti.models.payment_integration import PaymentIntegration
 from inti.models.conversation_message import ConversationMessage
 
 from inti.models.agent_session import AgentSession
+from inti.models.plugin_definition import PluginDefinition
 
 __all__ = [
     "Job",
@@ -33,4 +34,5 @@ __all__ = [
     "PaymentIntegration",
     "ConversationMessage",
     "AgentSession",
+    "PluginDefinition",
 ]

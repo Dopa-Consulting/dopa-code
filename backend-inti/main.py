@@ -14,7 +14,7 @@ from inti.database import engine, Base
 from inti.models import (  # noqa: F401 - register all models for table creation
     Job, JobStep, Diff, Approval, AuditLog, Event, CiRun, Device,
     ExperienceLesson, SkillDefinition, SkillExecution, ProjectKnowledge,
-    Tenant, PaymentIntegration, ConversationMessage, AgentSession,
+    Tenant, PaymentIntegration, ConversationMessage, AgentSession, PluginDefinition,
 )
 
 
@@ -41,9 +41,17 @@ async def lifespan(app: FastAPI):
     or_loaded = await openrouter.load_key()
     mp_loaded = await multiprovider.load_keys()
     print(f"  OpenRouter: {'configured' if or_loaded else 'not set'} | Direct providers: {mp_loaded} loaded")
-    from inti.skills_seeder import seed_all_skills
-    skills_result = await seed_all_skills()
-    print(f"  Skills: {skills_result['total']} loaded ({skills_result['new']} new, {skills_result['updated']} updated)")
+    # Plugin loader: descubre y registra skills desde plugins/
+    from inti.plugin_loader import plugin_loader
+    plugin_result = await plugin_loader.register_plugins()
+    print(f"  Plugins: {plugin_result['discovered']} discovered, {plugin_result['skills']} skills registered")
+    # Fallback: solo seedear skills si no hay plugins
+    if plugin_result["skills"] == 0:
+        from inti.skills_seeder import seed_all_skills
+        skills_result = await seed_all_skills()
+        print(f"  Skills (seeded): {skills_result['total']} loaded ({skills_result['new']} new, {skills_result['updated']} updated)")
+    else:
+        print(f"  Skills: loaded from plugins, seeder skipped")
     yield
     await engine.dispose()
 

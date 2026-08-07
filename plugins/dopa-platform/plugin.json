@@ -1,11 +1,15 @@
 {
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "dopa-platform",
   "version": "1.0.0",
-  "description": "Conocimiento del ecosistema Dopa: CRM, ERP, Dopa Sites, arquitectura multi-tenant, convenciones, y lecciones aprendidas en producción.",
-  "author": "Dopa Solutions",
-  "homepage": "https://dopa.solutions",
-  "repository": "https://github.com/Dopa-Consulting/dopa-platform",
+  "description": "Conocimiento del ecosistema Dopa para agentes",
+  "author": "Dopa Consulting",
   "license": "MIT",
-  "keywords": ["dopa", "erp", "crm", "multi-tenant", "ecommerce"]
+  "tags": ["dopa", "ecosystem", "platform", "public"],
+  "skills": [
+    "platform/dopa-erp",
+    "platform/dopa-web",
+    "platform/dopa-code",
+    "platform/sunat-facturacion"
+  ],
+  "mcp": {}
 }

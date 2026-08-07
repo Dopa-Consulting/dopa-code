@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # Timeout global del AgentLoop (segundos). 0 = sin limite.
     loop_timeout: int = 600
 
+    # Plugin system
+    plugins_dir: str = "../plugins"
+
     model_config = {"env_prefix": "DOPA_", "env_file": ".env", "extra": "ignore"}
 
     @model_validator(mode="after")

@@ -1,11 +1,18 @@
 {
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "dopa-dev",
   "version": "1.0.0",
-  "description": "Metodología de desarrollo de Dopa. Skills que todo agente de código debe conocer: clean code, TDD, verificación, git workflow, handoffs, trabajo paralelo.",
-  "author": "Dopa Solutions",
-  "homepage": "https://dopa.solutions",
-  "repository": "https://github.com/Dopa-Consulting/dopa-platform",
+  "description": "Skills de metodologia de desarrollo para agentes Dopa Code",
+  "author": "Dopa Consulting",
   "license": "MIT",
-  "keywords": ["development", "methodology", "tdd", "clean-code", "git"]
+  "tags": ["development", "methodology", "internal"],
+  "skills": [
+    "methodology/brainstorming",
+    "methodology/tdd",
+    "methodology/safe-deploy",
+    "methodology/the-architect",
+    "methodology/fix-and-verify",
+    "methodology/systematic-debugging",
+    "methodology/writing-skills"
+  ],
+  "mcp": {}
 }

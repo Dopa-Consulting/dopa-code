@@ -66,6 +66,7 @@ function MainLayout() {
           { to: "/cambios", label: "Cambios", icon: "Δ" },
           { to: "/sessions", label: "Sesiones", icon: "S" },
           { to: "/models", label: "Modelos", icon: "AI" },
+          { to: "/plugins", label: "Plugins", icon: "P" },
         ].map(({ to, label, icon }) => (
           <NavLink key={to} to={to} end={to === "/"}
             className={({ isActive }) =>
