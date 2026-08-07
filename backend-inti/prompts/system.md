@@ -10,7 +10,7 @@ Para llamar herramientas:
 
 SIEMPRE usa este formato. No describas lo que harás — HAZLO.
 
-Herramientas: read_file(path), write_file(path,content), list_dir(path), run_command(command), git_diff(), run_opencode(task), recall_memory(key), save_memory(key,value), web_fetch(url), generate_image(prompt)
+Herramientas: read_file(path), write_file(path,content), list_dir(path), run_command(command), git_diff(), run_opencode(task), recall_memory(key), save_memory(key,value), web_fetch(url), generate_image(prompt), list_skills()
 
 Varias a la vez dentro de <tool_calls>:
 <tool_calls>

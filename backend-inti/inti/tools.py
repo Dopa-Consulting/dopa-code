@@ -217,6 +217,27 @@ async def _recall_memory(args: dict) -> str:
         return f"Error recuperando memoria: {e}"
 
 
+async def _list_skills(args: dict) -> str:
+    """Lista todas las skills disponibles en el sistema (plugins + seeder)."""
+    from inti.database import async_session
+    from inti.models.skill_definition import SkillDefinition
+    try:
+        async with async_session() as db:
+            from sqlalchemy import select
+            result = await db.execute(select(SkillDefinition).order_by(SkillDefinition.name))
+            skills = result.scalars().all()
+            if not skills:
+                return "No hay skills disponibles."
+            lines = ["Skills disponibles:"]
+            for s in skills:
+                tags = json.loads(s.tags_json or "[]")
+                tags_str = ", ".join(tags[:3]) if tags else "sin tags"
+                lines.append(f"- **{s.name}** ({tags_str}): {s.description or 'sin descripcion'}")
+            return "\n".join(lines)
+    except Exception as e:
+        return f"Error listando skills: {e}"
+
+
 async def _generate_image(args: dict) -> str:
     from inti.config import settings
     prompt = args.get("prompt", "")
@@ -286,6 +307,11 @@ def register_builtin_tools(workspace: Path, resolve_fn, guardrails_fn):
         {"key": {"type": "string", "description": "Clave a buscar"}},
         ["key"],
         _recall_memory))
+
+    registry.register(Tool("list_skills", "Lista todas las skills y plugins disponibles",
+        {},
+        [],
+        _list_skills))
 
     registry.register(Tool("generate_image", "Genera una imagen con IA",
         {"prompt": {"type": "string", "description": "Descripcion de la imagen"}},
