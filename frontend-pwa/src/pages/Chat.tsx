@@ -329,9 +329,10 @@ export default function Chat() {
     }));
     const allowedDirs = JSON.parse(localStorage.getItem("dopa-dirs") || "[]");
     const sessionId = localStorage.getItem("dopa-session-id") || "";
-    send({ type: "chat", content: prompt, require_approval: requireApproval, history: chatHistory, workspace, allowed_dirs: allowedDirs, session_id: sessionId });
+    const currentWorkspace = workspace || localStorage.getItem("dopa-workspace") || "";
+    send({ type: "chat", content: prompt, require_approval: requireApproval, history: chatHistory, workspace: currentWorkspace, allowed_dirs: allowedDirs, session_id: sessionId });
     setInput("");
-  }, [input, send, subscribe]);
+  }, [input, send, subscribe, workspace, messages]);
 
   return (
     <div className="flex flex-col h-[calc(100dvh-120px)]">
