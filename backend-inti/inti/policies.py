@@ -80,7 +80,8 @@ ActorType = Literal[
 
 ALLOWED_COMMANDS: dict[str, list[str]] = {
     "git": ["status", "diff", "checkout", "commit", "push", "branch", "log", "add", "config"],
-    "python": ["-m", "-c"],
+    "python": [],
+    "python3": [],
     "pip": ["install", "list", "freeze"],
     "npm": ["test", "run", "install", "build"],
     "npx": [],

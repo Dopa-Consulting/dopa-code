@@ -109,6 +109,36 @@ class Orchestrator:
         self.max_concurrent: int = 5
         self._emitters: list[Callable[[dict], Awaitable[None]]] = []
 
+    async def load_from_db(self):
+        """Carga sesiones desde la DB al iniciar el daemon (persistencia entre reinicios)."""
+        try:
+            from inti.database import async_session
+            from inti.models.agent_session import AgentSession as AgentSessionModel
+            from sqlalchemy import select
+            async with async_session() as db:
+                result = await db.execute(
+                    select(AgentSessionModel).where(
+                        AgentSessionModel.status.in_(["idle", "running", "waiting"])
+                    )
+                )
+                rows = result.scalars().all()
+                for row in rows:
+                    self.sessions[row.id] = AgentSession(
+                        id=row.id,
+                        role=row.role,
+                        model=row.model,
+                        provider=row.provider,
+                        workspace_path=row.workspace_path,
+                        status="idle",  # Resetear a idle al reiniciar
+                        current_job_id=None,
+                        created_at=row.created_at or datetime.now(timezone.utc),
+                        last_active_at=row.last_active_at,
+                        metadata=row.meta_info or {},
+                    )
+                logger.info(f"Loaded {len(rows)} sessions from DB")
+        except Exception:
+            logger.warning("Failed to load sessions from DB", exc_info=True)
+
     def register_emitter(self, emitter: Callable[[dict], Awaitable[None]]):
         """Registra un callback para emitir eventos WebSocket (SessionStateChanged)."""
         self._emitters.append(emitter)

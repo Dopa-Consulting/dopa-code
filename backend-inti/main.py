@@ -41,6 +41,9 @@ async def lifespan(app: FastAPI):
     or_loaded = await openrouter.load_key()
     mp_loaded = await multiprovider.load_keys()
     print(f"  OpenRouter: {'configured' if or_loaded else 'not set'} | Direct providers: {mp_loaded} loaded")
+    # Cargar sesiones previas de la DB
+    from inti.orchestrator import orchestrator
+    await orchestrator.load_from_db()
     # Plugin loader: descubre y registra skills desde plugins/
     from inti.plugin_loader import plugin_loader
     plugin_result = await plugin_loader.register_plugins()
@@ -153,6 +156,11 @@ async def websocket_endpoint(websocket: WebSocket):
             content = data.get("content", "")
             ws_in = data.get("workspace", "")
             workspace = ws_in if ws_in and Path(ws_in).is_dir() else str(Path.cwd())
+            if ws_in and not Path(ws_in).is_dir():
+                await websocket.send_json({
+                    "event_type": "error",
+                    "payload": {"error": f"Workspace no valido o no existe: {ws_in}. Usando {workspace}"},
+                })
 
             # Resetear sesion si el frontend pide nuevo chat
             if data.get("new_session"):
