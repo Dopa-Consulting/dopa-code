@@ -1,0 +1,47 @@
+{
+  "rules": {
+    "require_tests": {
+      "enabled": true,
+      "description": "Requiere que los cambios incluyan tests",
+      "check": "*.test.*|*.spec.*|tests/**"
+    },
+    "max_file_size": {
+      "enabled": true,
+      "max_kb": 50,
+      "description": "Archivos mayores a 50KB requieren review manual"
+    },
+    "forbidden_patterns": {
+      "enabled": true,
+      "patterns": [
+        "console.log(",
+        "debugger",
+        "TODO:",
+        "FIXME:",
+        "cambiar-en-produccion",
+        "sk-or-v1-"
+      ]
+    },
+    "require_gitignore": {
+      "enabled": true,
+      "patterns": [".env", "*.db", "*.sqlite", "node_modules/", "__pycache__/"]
+    },
+    "no_orphan_files": {
+      "enabled": true,
+      "description": "Nuevos archivos deben ser referenciados por al menos otro archivo"
+    }
+  },
+  "scoring": {
+    "pass_threshold": 70,
+    "weights": {
+      "require_tests": 25,
+      "max_file_size": 15,
+      "forbidden_patterns": 25,
+      "require_gitignore": 20,
+      "no_orphan_files": 15
+    }
+  },
+  "badge": {
+    "label": "Loop Ready",
+    "style": "flat"
+  }
+}

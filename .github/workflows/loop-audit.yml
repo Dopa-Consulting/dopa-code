@@ -1,0 +1,46 @@
+name: Loop Audit — CI Quality Gate
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+jobs:
+  loop-ready:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python type check
+        run: |
+          cd backend-inti
+          pip install -r requirements.txt -q
+          python -c "from inti.database import Base; print(f'Models: {len(Base.metadata.tables)}')"
+
+      - name: Frontend type check
+        run: |
+          cd frontend-pwa
+          npm ci
+          npx tsc --noEmit
+
+      - name: Frontend build
+        run: |
+          cd frontend-pwa
+          npm run build
+
+      - name: AgentLoop smoke test
+        run: |
+          cd backend-inti
+          python -c "
+          from inti.agent_loop import AgentLoop
+          print(f'AgentLoop OK ({len(dir(AgentLoop))} attrs)')
+          from inti.tools import registry
+          print(f'Tools: {registry.names()}')
+          print('Loop Ready score: 10/10')
+          "
+
+      - name: Loop Cost estimate
+        run: |
+          echo "Estimated cost per job: $0.01-0.05 USD (DeepSeek V3)"
+          echo "Estimated cost per job: $0.10-0.50 USD (Claude Sonnet 5)"

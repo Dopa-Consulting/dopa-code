@@ -35,6 +35,7 @@ class AgentLoop:
         self.max_iterations = settings.max_iterations
         self.allowed_dirs = [Path(d).resolve() for d in (allowed_dirs or []) if Path(d).is_dir()]
         self.tenant_id = tenant_id
+        self.loop_cost = None  # se inicializa en run()
         # Registrar tools si no estan ya
         if not tool_registry.names():
             register_builtin_tools(
@@ -462,6 +463,9 @@ class AgentLoop:
 
         previous_tool_calls: set[str] = set()  # Guard contra repeticion
         nudge_count = 0  # Contador de nudges sin tools
+        # Inicializar tracker de costos para este job
+        from inti.loop_cost import LoopCost
+        self.loop_cost = LoopCost(self.model)
 
         for iteration in range(self.max_iterations):
             # Emitir "pensando" en CADA iteracion para que el usuario sepa que Inti sigue vivo
@@ -504,6 +508,10 @@ class AgentLoop:
                     "payload": {"error": resp["error"]},
                 })
                 return
+
+            # Track cost: acumular tokens de esta iteracion
+            if self.loop_cost and resp.get("usage"):
+                self.loop_cost.add_usage(resp["usage"])
 
             tool_calls = resp.get("tool_calls")
             # Si el modelo devuelve tool calls como texto XML en vez del formato nativo

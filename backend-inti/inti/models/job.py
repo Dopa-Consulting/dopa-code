@@ -40,6 +40,10 @@ class Job(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    # Loop cost tracking
+    total_tokens: Mapped[int] = mapped_column(default=0)
+    total_cost_usd: Mapped[float] = mapped_column(default=0.0)
+    iterations: Mapped[int] = mapped_column(default=0)
 
     steps: Mapped[list["JobStep"]] = relationship(
         "JobStep", back_populates="job", order_by="JobStep.order", cascade="all, delete-orphan"

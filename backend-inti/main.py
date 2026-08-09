@@ -255,6 +255,13 @@ async def websocket_endpoint(websocket: WebSocket):
             else:
                 await loop.run(content, emit=emit, history=merged_history)
 
+            # Persistir costo del loop
+            if loop.loop_cost and loop.loop_cost.total_tokens > 0 and session_id:
+                await emit({
+                    "event_type": "loop.cost",
+                    "payload": loop.loop_cost.to_dict(),
+                })
+
             history.append({"role": "user", "content": content})
             if final_reply["content"]:
                 history.append({"role": "assistant", "content": final_reply["content"]})

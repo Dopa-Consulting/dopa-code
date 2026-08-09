@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "loop": {
+      "command": "npx",
+      "args": ["@cobusgreyling/loop-mcp-server"],
+      "env": {
+        "LOOP_API_URL": "http://localhost:4097",
+        "LOOP_PROJECT_ID": "dopa-code"
+      }
+    }
+  }
+}
