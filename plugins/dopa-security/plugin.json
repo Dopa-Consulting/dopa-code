@@ -1,0 +1,22 @@
+{
+  "name": "dopa-security",
+  "version": "1.0.0",
+  "description": "Skills de seguridad Trail of Bits + playbook de auditoría para Dopa Code",
+  "author": "Dopa Consulting / Trail of Bits",
+  "license": "MIT",
+  "tags": ["security", "audit", "trail-of-bits", "internal"],
+  "skills": [
+    "tier1/differential-review",
+    "tier1/sharp-edges",
+    "tier1/insecure-defaults",
+    "tier2/codeql",
+    "tier2/semgrep",
+    "tier2/semgrep-rule-creator",
+    "tier2/supply-chain-risk-auditor",
+    "tier3/modern-python",
+    "tier3/git-cleanup",
+    "tier3/sarif-parsing",
+    "playbook/security-audit-playbook"
+  ],
+  "mcp": {}
+}
