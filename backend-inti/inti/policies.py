@@ -106,6 +106,9 @@ ALLOWED_COMMANDS: dict[str, list[str]] = {
     "opencode": [],
 }
 
+# Comandos que requieren aprobacion humana (riesgo de codigo arbitrario)
+REQUIRE_APPROVAL = {"npx", "powershell", "curl", "wget", "rm", "del"}
+
 
 @dataclass
 class ModelRole:

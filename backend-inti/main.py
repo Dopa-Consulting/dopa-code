@@ -146,21 +146,55 @@ async def websocket_endpoint(websocket: WebSocket):
     # Inti no recordaba nada dentro de una misma conversación).
     history: list[dict] = []
     session_id: str = ""
+    # WebSocket rate limiting (MEDIUM #5)
+    ws_msg_count = 0
+    ws_msg_window = time.time()
     try:
         while True:
             data = await websocket.receive_json()
+            # Rate limit: max 10 mensajes/segundo
+            ws_msg_count += 1
+            if ws_msg_count > 10:
+                elapsed = time.time() - ws_msg_window
+                if elapsed < 1.0:
+                    await websocket.close(1008, "Rate limit exceeded")
+                    break
+                ws_msg_count = 0
+                ws_msg_window = time.time()
+
             if data.get("type") != "chat":
                 await websocket.send_json({"event_type": "Echo", "payload": {"received": str(data)[:200]}})
                 continue
 
             content = data.get("content", "")
             ws_in = data.get("workspace", "")
-            workspace = ws_in if ws_in and Path(ws_in).is_dir() else str(Path.cwd())
-            if ws_in and not Path(ws_in).is_dir():
-                await websocket.send_json({
-                    "event_type": "error",
-                    "payload": {"error": f"Workspace no valido o no existe: {ws_in}. Usando {workspace}"},
-                })
+            # Validar workspace contra whitelist de raices (HIGH #2)
+            ws_path = Path(ws_in).resolve() if ws_in else None
+            if ws_path and ws_path.is_dir():
+                roots = [Path(r).resolve() for r in settings.allowed_workspace_roots]
+                if not roots or any(ws_path == r or ws_path.is_relative_to(r) for r in roots):
+                    workspace = str(ws_path)
+                else:
+                    await websocket.send_json({
+                        "event_type": "error",
+                        "payload": {"error": f"Workspace fuera de raices permitidas: {ws_in}. Configura DOPA_ALLOWED_WORKSPACE_ROOTS."},
+                    })
+                    continue
+            else:
+                if ws_in:
+                    await websocket.send_json({
+                        "event_type": "error",
+                        "payload": {"error": f"Workspace no valido: {ws_in}. Usando directorio actual."},
+                    })
+                workspace = str(Path.cwd())
+
+            # Validar allowed_dirs (HIGH #3)
+            raw_dirs = data.get("allowed_dirs", [])
+            allowed_dirs = []
+            for d in (raw_dirs or []):
+                resolved = Path(d).resolve()
+                if resolved.is_dir() and (not roots or any(resolved == r or resolved.is_relative_to(r) for r in roots)):
+                    allowed_dirs.append(str(resolved))
 
             # Resetear sesion si el frontend pide nuevo chat
             if data.get("new_session"):

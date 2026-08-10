@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # Plugin system
     plugins_dir: str = "../plugins"
 
+    # Workspace security: raices permitidas (vacio = todas)
+    allowed_workspace_roots: list[str] = []
+
     model_config = {"env_prefix": "DOPA_", "env_file": ".env", "extra": "ignore"}
 
     @model_validator(mode="after")

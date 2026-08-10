@@ -184,6 +184,7 @@ El core de Dopa Code es MIT. Estrategias de monetizacion planeadas:
 ## Pitch
 
 Dopa Code es un orquestador de agentes de IA que vive en tu PC y se controla desde tu movil. No es otro IDE en la nube -- es tu control tower personal.
+<!-- QA test modification -->
 
 Elige tus modelos (Opus, Sonnet, DeepSeek via OpenRouter), define tus politicas de seguridad, y deja que Inti planifique, ejecute, revise y despliegue cambios en tu codigo -- mientras tu apruebas o rechazas desde el celular.
 
