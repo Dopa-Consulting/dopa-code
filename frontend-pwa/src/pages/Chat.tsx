@@ -118,6 +118,36 @@ export default function Chat() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const toolRef = useRef<string | null>(null);
   const msgCountRef = useRef(0);
+  const lastSessionRef = useRef(localStorage.getItem("dopa-session-id"));
+
+  // BUG #1: Al cambiar de sesion, limpiar chat viejo y cargar historial nuevo
+  useEffect(() => {
+    const current = localStorage.getItem("dopa-session-id");
+    if (current && current !== lastSessionRef.current) {
+      lastSessionRef.current = current;
+      localStorage.removeItem("dopa-chat");
+      setMessages([getWelcome()]);
+      setClickedJobs(new Set());
+      // Cargar historial de la sesion desde el backend
+      fetch(`/api/v1/sessions/${current}/messages`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.messages?.length) {
+            const loaded: Message[] = [getWelcome()];
+            for (const m of data.messages) {
+              loaded.push({
+                id: crypto.randomUUID(),
+                role: m.role === "user" ? "user" : "intl",
+                content: m.content,
+                timestamp: m.created_at || new Date().toISOString(),
+              });
+            }
+            setMessages(loaded);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     const isFirst = msgCountRef.current === 0;
@@ -542,9 +572,11 @@ function MicButton({ onTranscript }: { onTranscript: (t: string) => void }) {
           const res = await fetch("/api/v1/voice/transcribe", { method: "POST", body: form });
           const data = await res.json();
           if (data.transcript) { onTranscript(data.transcript); return; }
-        } catch { /* STT fallo */ }
-        // Fallback a Web Speech si STT fallo o no hay key
-        tryWebSpeech();
+          // STT devolvio vacio → mostrar error
+          setError(data.error ? "API key no configurada" : "No se detecto voz");
+        } catch {
+          setError("Error de conexion al transcribir");
+        }
       };
       recorder.start();
       mediaRef.current = recorder;

@@ -26,6 +26,18 @@ export default function Cambios() {
 
   useEffect(() => { fetchChanges(); }, []);
 
+  // BUG #3: Re-fetch cuando vuelve a la pestaña o cambia el workspace
+  useEffect(() => {
+    const onFocus = () => fetchChanges();
+    const onStorage = (e: StorageEvent) => { if (e.key === "dopa-workspace") fetchChanges(); };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
