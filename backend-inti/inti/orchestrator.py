@@ -116,11 +116,7 @@ class Orchestrator:
             from inti.models.agent_session import AgentSession as AgentSessionModel
             from sqlalchemy import select
             async with async_session() as db:
-                result = await db.execute(
-                    select(AgentSessionModel).where(
-                        AgentSessionModel.status.in_(["idle", "running", "waiting"])
-                    )
-                )
+                result = await db.execute(select(AgentSessionModel))
                 rows = result.scalars().all()
                 for row in rows:
                     self.sessions[row.id] = AgentSession(
@@ -129,7 +125,7 @@ class Orchestrator:
                         model=row.model,
                         provider=row.provider,
                         workspace_path=row.workspace_path,
-                        status="idle",  # Resetear a idle al reiniciar
+                        status=row.status if row.status in ("idle", "waiting") else "idle",
                         current_job_id=None,
                         created_at=row.created_at or datetime.now(timezone.utc),
                         last_active_at=row.last_active_at,
