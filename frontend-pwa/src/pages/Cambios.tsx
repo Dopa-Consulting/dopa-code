@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Change {
   status: string;
@@ -10,6 +10,7 @@ export default function Cambios() {
   const [data, setData] = useState<{ is_git?: boolean; branch?: string; files?: Change[]; raw?: string; diff?: string; error?: string }>({});
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const expandedRef = useRef(false);
 
   const workspace = localStorage.getItem("dopa-workspace") || "";
 
@@ -29,8 +30,8 @@ export default function Cambios() {
   useEffect(() => { fetchChanges(); }, []);
 
   useEffect(() => {
-    const onFocus = () => fetchChanges(expanded);
-    const onStorage = (e: StorageEvent) => { if (e.key === "dopa-workspace") fetchChanges(expanded); };
+    const onFocus = () => fetchChanges(expandedRef.current);
+    const onStorage = (e: StorageEvent) => { if (e.key === "dopa-workspace") fetchChanges(expandedRef.current); };
     window.addEventListener("focus", onFocus);
     window.addEventListener("storage", onStorage);
     return () => {
@@ -42,6 +43,7 @@ export default function Cambios() {
   const toggleDiff = () => {
     const next = !expanded;
     setExpanded(next);
+    expandedRef.current = next;
     fetchChanges(next);
   };
 
