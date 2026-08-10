@@ -611,15 +611,13 @@ class AgentLoop:
                 except (json.JSONDecodeError, TypeError):
                     args = {}
 
-                # Loop guard
+                # Loop guard: detectar repeticion → forzar sintesis en vez de rendirse
                 call_key = f"{name}:{json.dumps(args, sort_keys=True)}"
                 if call_key in previous_tool_calls and iteration > 0:
+                    content = await self._force_final_answer(messages)
                     await emit({
                         "event_type": "chat_response",
-                        "payload": {
-                            "content": f"Detecte que estoy repitiendo la misma accion ({name}). Me detengo para no gastar tokens.",
-                            "model": self.model,
-                        },
+                        "payload": {"content": content, "model": self.model},
                     })
                     return
                 previous_tool_calls.add(call_key)
