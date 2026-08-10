@@ -193,6 +193,11 @@ export default function Chat() {
       if (et === "step.start" || et === "chat_response" || et === "error") {
         setMessages((prev) => prev.filter((m) => !m.thinking));
       }
+      if (et === "error") {
+        const errMsg = ((e.payload || {}) as Record<string,unknown>).error as string || "Error desconocido";
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "system", content: errMsg, timestamp: new Date().toISOString() }]);
+        return;
+      }
       if (et === "loop.thinking") {
         const it = (e.payload as Record<string,unknown>)?.iteration as number || 0;
         const max = (e.payload as Record<string,unknown>)?.max as number || 20;
