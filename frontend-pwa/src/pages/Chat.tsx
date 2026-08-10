@@ -118,18 +118,15 @@ export default function Chat() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const toolRef = useRef<string | null>(null);
   const msgCountRef = useRef(0);
-  const lastSessionRef = useRef(localStorage.getItem("dopa-session-id"));
 
-  // BUG #1: Al cambiar de sesion, limpiar chat viejo y cargar historial nuevo
+  // Al montar: si hay session_id, limpiar chat viejo y cargar historial
   useEffect(() => {
-    const current = localStorage.getItem("dopa-session-id");
-    if (current && current !== lastSessionRef.current) {
-      lastSessionRef.current = current;
+    const sid = localStorage.getItem("dopa-session-id");
+    if (sid) {
       localStorage.removeItem("dopa-chat");
       setMessages([getWelcome()]);
       setClickedJobs(new Set());
-      // Cargar historial de la sesion desde el backend
-      fetch(`/api/v1/sessions/${current}/messages`)
+      fetch(`/api/v1/sessions/${sid}/messages`)
         .then(r => r.json())
         .then(data => {
           if (data.messages?.length) {
