@@ -406,7 +406,7 @@ class OpenRouterClient:
             payload["tool_choice"] = tool_choice
 
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
                     f"{self.base_url}/chat/completions",
                     headers=self.get_headers(),
