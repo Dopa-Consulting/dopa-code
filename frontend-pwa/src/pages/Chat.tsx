@@ -119,10 +119,12 @@ export default function Chat() {
   const toolRef = useRef<string | null>(null);
   const msgCountRef = useRef(0);
 
-  // Al montar: si hay session_id, limpiar chat viejo y cargar historial
+  // Solo limpiar si session_id cambio vs la ultima sesion abierta (guarda en localStorage)
   useEffect(() => {
-    const sid = localStorage.getItem("dopa-session-id");
-    if (sid) {
+    const sid = localStorage.getItem("dopa-session-id") || "";
+    const last = localStorage.getItem("dopa-last-session-id") || "";
+    if (sid && sid !== last) {
+      localStorage.setItem("dopa-last-session-id", sid);
       localStorage.removeItem("dopa-chat");
       setMessages([getWelcome()]);
       setClickedJobs(new Set());

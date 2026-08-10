@@ -26,8 +26,8 @@ async def browse_folder():
 
 
 @router.get("/changes")
-async def workspace_changes(path: str = Query(...)):
-    """Devuelve el git status del workspace."""
+async def workspace_changes(path: str = Query(...), diff: str = Query("0")):
+    """Devuelve git status + opcionalmente diff del workspace."""
     ws = Path(path).resolve()
     if not ws.exists() or not ws.is_dir():
         raise HTTPException(status_code=400, detail="Path invalido o no existe")
@@ -45,23 +45,51 @@ async def workspace_changes(path: str = Query(...)):
         )
         raw = status_r.stdout
 
+        # Per-file stats: +N -N
+        stat_r = subprocess.run(
+            ["git", "diff", "--stat"],
+            cwd=str(ws), capture_output=True, text=True, timeout=10,
+        )
+        stat_lines = stat_r.stdout.strip().split("\n")
+
         files = []
         for line in raw.split("\n"):
             line = line.strip()
             if not line:
                 continue
             if len(line) >= 3:
+                status = line[:2].strip() or "??"
+                fpath = line[3:].strip()
+                # Buscar stats para este archivo
+                stats = ""
+                for sl in stat_lines:
+                    if sl.strip().endswith(fpath) or f" {fpath}" in sl or f"{fpath} " in sl:
+                        parts = sl.strip().split("|")
+                        if len(parts) >= 2:
+                            stats = parts[-1].strip()
+                        break
                 files.append({
-                    "status": line[:2].strip() or "??",
-                    "path": line[3:].strip(),
+                    "status": status,
+                    "path": fpath,
+                    "stats": stats,
                 })
 
-        return {
+        result = {
             "is_git": True,
             "branch": branch or "unknown",
             "files": files,
             "raw": raw if raw else "(working tree limpio)",
         }
+
+        # Diff completo (opcional, para expandir archivos)
+        if diff == "1":
+            diff_r = subprocess.run(
+                ["git", "diff"],
+                cwd=str(ws), capture_output=True, text=True, timeout=15,
+            )
+            result["diff"] = diff_r.stdout or "(sin diff)"
+
+        return result
     except FileNotFoundError:
         return {"is_git": False, "error": "git no disponible"}
     except subprocess.TimeoutExpired:
