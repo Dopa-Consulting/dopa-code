@@ -385,18 +385,9 @@ export default function Chat() {
           placeholder="D:\proyectos\mi-repo"
           className="flex-1 rounded bg-slate-800 border border-slate-700 px-2 py-1 text-xs text-slate-400 font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500/50"
         />
-        <button onClick={async () => {
-          try {
-            // Intentar API nativa del navegador (instantaneo, Chrome/Edge)
-            const dirHandle = await (window as unknown as { showDirectoryPicker: () => Promise<{ name: string }> }).showDirectoryPicker();
-            if (dirHandle) {
-              setWorkspace(dirHandle.name);
-              localStorage.setItem("dopa-workspace", dirHandle.name);
-              return;
-            }
-          } catch { /* API no disponible o cancelado */ }
-          // Fallback: prompt manual
-          const p = prompt("Ruta del workspace:", localStorage.getItem("dopa-workspace") || "D:\\proyectos\\mi-repo");
+        <button onClick={() => {
+          const ws = localStorage.getItem("dopa-workspace") || "";
+          const p = prompt("Ruta completa del workspace:", ws || "D:\\proyectos\\mi-repo");
           if (p) { setWorkspace(p); localStorage.setItem("dopa-workspace", p); }
         }}
           className="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
