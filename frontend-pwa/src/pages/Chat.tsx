@@ -387,10 +387,17 @@ export default function Chat() {
         />
         <button onClick={async () => {
           try {
-            const r = await fetch("/api/v1/workspace/browse");
-            const d = await r.json();
-            if (d.path) { setWorkspace(d.path); localStorage.setItem("dopa-workspace", d.path); }
-          } catch { /* fallback */ }
+            // Intentar API nativa del navegador (instantaneo, Chrome/Edge)
+            const dirHandle = await (window as unknown as { showDirectoryPicker: () => Promise<{ name: string }> }).showDirectoryPicker();
+            if (dirHandle) {
+              setWorkspace(dirHandle.name);
+              localStorage.setItem("dopa-workspace", dirHandle.name);
+              return;
+            }
+          } catch { /* API no disponible o cancelado */ }
+          // Fallback: prompt manual
+          const p = prompt("Ruta del workspace:", localStorage.getItem("dopa-workspace") || "D:\\proyectos\\mi-repo");
+          if (p) { setWorkspace(p); localStorage.setItem("dopa-workspace", p); }
         }}
           className="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
           title="Explorar carpetas">
