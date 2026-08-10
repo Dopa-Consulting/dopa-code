@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 
 const API_BASE = `${location.protocol}//${location.host}/api/v1`;
 
@@ -15,7 +14,6 @@ interface Session {
 }
 
 export default function Sessions() {
-  const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [workspace, setWorkspace] = useState(localStorage.getItem("dopa-workspace") || "D:\\Dopa\\01_Desarrollo\\dopa-code");
   const [role, setRole] = useState("builder");
@@ -82,7 +80,7 @@ export default function Sessions() {
                 if (s.workspace_path) localStorage.setItem("dopa-workspace", s.workspace_path);
                 if (s.metadata?.title) localStorage.setItem("dopa-session-title", String(s.metadata.title));
                 localStorage.setItem("dopa-session-id", s.id);
-                navigate("/");
+                window.location.href = "/";
               }}
               className="rounded-lg bg-slate-900 border border-slate-800 p-3 cursor-pointer hover:bg-slate-800/50 transition-colors">
               <div className="flex items-center justify-between">
