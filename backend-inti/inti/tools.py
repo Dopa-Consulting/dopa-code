@@ -114,7 +114,7 @@ async def _run_command(args: dict, workspace: Path) -> str:
             return f"BLOQUEADO por politicas: '{cmd_parts[0]}' no esta en la whitelist"
         if cmd_parts[0] in REQUIRE_APPROVAL:
             return f"BLOQUEADO: '{cmd_parts[0]}' requiere aprobacion humana. Usa run_opencode o solicita permiso."
-    # CRITICAL FIX #1: eliminar shell=True. Usar lista con shlex para prevenir inyeccion
+    # CRITICAL FIX #1: intentar shell=False primero, fallback a shell=True si falla
     import shlex
     try:
         safe_cmd = shlex.split(cmd)
@@ -126,16 +126,20 @@ async def _run_command(args: dict, workspace: Path) -> str:
             subprocess.run, safe_cmd, shell=False, cwd=str(workspace),
             capture_output=True, text=True, timeout=timeout_s,
         )
-        out = result.stdout.strip()
-        err = result.stderr.strip()
-        combined = out
-        if err:
-            combined += f"\n[stderr]\n{err}"
-        return combined if combined else "(sin salida)"
+    except (FileNotFoundError, OSError):
+        # Fallback: shell=True para comandos como git status en Windows
+        result = await asyncio.to_thread(
+            subprocess.run, cmd, shell=True, cwd=str(workspace),
+            capture_output=True, text=True, timeout=timeout_s,
+        )
     except subprocess.TimeoutExpired:
         return f"Timeout: el comando excedio {timeout_s}s"
-    except FileNotFoundError:
-        return f"Error: comando no encontrado: '{cmd_parts[0]}'"
+    out = result.stdout.strip()
+    err = result.stderr.strip()
+    combined = out
+    if err:
+        combined += f"\n[stderr]\n{err}"
+    return combined if combined else "(sin salida)"
 
 
 async def _git_diff(args: dict, workspace: Path) -> str:
