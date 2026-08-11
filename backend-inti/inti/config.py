@@ -6,7 +6,7 @@ import secrets
 class Settings(BaseSettings):
     app_name: str = "Dopa Code - Inti"
     version: str = "0.1.0"
-    database_url: str = "sqlite+aiosqlite:///./dopa_code.db"
+    database_url: str = "sqlite+aiosqlite:///./dopa_code.db?timeout=30"
     cors_origins: list[str] = ["*"]
     jwt_secret: str = "cambiar-en-produccion"
     jwt_algorithm: str = "HS256"

@@ -54,25 +54,33 @@ async def workspace_changes(path: str = Query(...), diff: str = Query("0")):
 
         files = []
         for line in raw.split("\n"):
-            line = line.strip()
-            if not line:
+            if not line.strip():
                 continue
-            if len(line) >= 3:
-                status = line[:2].strip() or "??"
+            # BUG-WORK-001: NO usar line.strip() completo — el formato es "XY path"
+            # Usar split con maxsplit para obtener status y path correctamente
+            parts = line.split(maxsplit=1)
+            if len(parts) >= 2:
+                status = parts[0]
+                fpath = parts[1].strip()
+            elif len(line) >= 3:
+                # Fallback: formato con espacios
+                status = line[:2].strip()
                 fpath = line[3:].strip()
-                # Buscar stats para este archivo
-                stats = ""
-                for sl in stat_lines:
-                    if sl.strip().endswith(fpath) or f" {fpath}" in sl or f"{fpath} " in sl:
-                        parts = sl.strip().split("|")
-                        if len(parts) >= 2:
-                            stats = parts[-1].strip()
-                        break
-                files.append({
-                    "status": status,
-                    "path": fpath,
-                    "stats": stats,
-                })
+            else:
+                continue
+            # Buscar stats para este archivo
+            stats = ""
+            for sl in stat_lines:
+                if sl.strip().endswith(fpath) or f" {fpath}" in sl or f"{fpath} " in sl:
+                    stat_parts = sl.strip().split("|")
+                    if len(stat_parts) >= 2:
+                        stats = stat_parts[-1].strip()
+                    break
+            files.append({
+                "status": status,
+                "path": fpath,
+                "stats": stats,
+            })
 
         result = {
             "is_git": True,
