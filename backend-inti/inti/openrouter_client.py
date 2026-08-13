@@ -778,42 +778,55 @@ class MultiProviderClient:
     async def _chat_openai_compat(
         self, api_key: str, endpoint: str, model: str, messages: list[dict], max_tokens: int, tools: list | None = None
     ) -> dict:
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                payload: dict = {
-                    "model": model,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                }
-                if tools and "deepseek" not in model.lower():
-                    payload["tools"] = tools
-                    payload["tool_choice"] = "auto"
-                resp = await client.post(
-                    endpoint,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                )
-                if resp.status_code != 200:
-                    return {"error": f"API error {resp.status_code}", "detail": resp.text[:500]}
-                data = resp.json()
-                choice = data.get("choices", [{}])[0]
-                usage = data.get("usage", {})
-                return {
-                    "model": data.get("model", model),
-                    "content": choice.get("message", {}).get("content", ""),
-                    "tool_calls": choice.get("message", {}).get("tool_calls"),
-                    "finish_reason": choice.get("finish_reason", "unknown"),
-                    "usage": {
-                        "prompt_tokens": usage.get("prompt_tokens", 0),
-                        "completion_tokens": usage.get("completion_tokens", 0),
-                        "total_tokens": usage.get("total_tokens", 0),
-                    },
-                }
-        except Exception as e:
-            return {"error": str(e)}
+        import asyncio as _asyncio
+        payload: dict = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+        if tools and "deepseek" not in model.lower():
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+
+        last_error = ""
+        for attempt in range(4):
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    resp = await client.post(
+                        endpoint,
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                    )
+                    # Retry con backoff para 429 y 5xx
+                    if resp.status_code in (429, 500, 502, 503, 504) and attempt < 3:
+                        last_error = f"API error {resp.status_code}"
+                        await _asyncio.sleep(0.5 * (2 ** attempt))
+                        continue
+                    if resp.status_code != 200:
+                        return {"error": f"API error {resp.status_code}", "detail": resp.text[:500]}
+                    data = resp.json()
+                    choice = data.get("choices", [{}])[0]
+                    usage = data.get("usage", {})
+                    return {
+                        "model": data.get("model", model),
+                        "content": choice.get("message", {}).get("content", ""),
+                        "tool_calls": choice.get("message", {}).get("tool_calls"),
+                        "finish_reason": choice.get("finish_reason", "unknown"),
+                        "usage": {
+                            "prompt_tokens": usage.get("prompt_tokens", 0),
+                            "completion_tokens": usage.get("completion_tokens", 0),
+                            "total_tokens": usage.get("total_tokens", 0),
+                        },
+                    }
+            except Exception as e:
+                last_error = str(e)
+                if attempt < 3:
+                    await _asyncio.sleep(0.5 * (2 ** attempt))
+                continue
+        return {"error": f"Retry agotado: {last_error}"}
 
     async def _chat_anthropic(
         self, api_key: str, endpoint: str, model: str, messages: list[dict], max_tokens: int

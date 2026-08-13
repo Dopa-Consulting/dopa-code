@@ -46,6 +46,8 @@ class AgentLoop:
 
     def _strip_tool_text(self, content: str) -> str:
         """Remueve JSON/XML de tool calls del texto visible."""
+        # Balanced-brace stripper PRIMERO: elimina objetos JSON con llaves anidadas
+        content = self._strip_balanced_json(content)
         # Bloque JSON con fences (```json ... ```)
         content = re.sub(r'```(?:json|plaintext)?\s*\n?\{[\s\S]*?\}\s*\n?```', '', content)
         # JSON con "type": "function" (formato nativo)
@@ -62,6 +64,41 @@ class AgentLoop:
         content = re.sub(r"<tool_calls>[\s\S]*?</tool_calls>", "", content)
         content = re.sub(rf"<(?:[\w-]+:)?(list_dir|read_file|write_file|run_command|git_diff|run_opencode|web_fetch|save_memory|recall_memory|generate_image)\b[^>]*\s*/>", "", content)
         return content.strip()
+
+    @staticmethod
+    def _strip_balanced_json(content: str) -> str:
+        """Elimina objetos JSON con llaves balanceadas que contengan claves de tool."""
+        result = content
+        # Buscar cada { que parezca un tool call JSON y hacer matching de llaves
+        i = 0
+        while i < len(result):
+            if result[i] == '{':
+                # Verificar si este objeto contiene claves de tool
+                depth = 0
+                j = i
+                in_str = False
+                block_end = -1
+                has_tool_key = False
+                while j < len(result):
+                    ch = result[j]
+                    if ch == '"' and (j == 0 or result[j-1] != '\\'):
+                        in_str = not in_str
+                    elif not in_str:
+                        if ch == '{':
+                            depth += 1
+                        elif ch == '}':
+                            depth -= 1
+                            if depth == 0:
+                                block_end = j
+                                break
+                    j += 1
+                if block_end != -1:
+                    block = result[i:block_end+1]
+                    if re.search(r'"(type|function|parameters|path|command|content|task|prompt)"', block):
+                        result = result[:i] + result[block_end+1:]
+                        continue
+            i += 1
+        return result
 
     def _make_clean_content(self, raw: str, tool_calls: list[dict] | None) -> str:
         """Genera contenido limpio. Si hay tool_calls, solo muestra un resumen."""
