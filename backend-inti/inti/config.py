@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     executor_model: str = "deepseek-v4-flash"
     qa_model: str = "anthropic/claude-sonnet-5"
 
-    loop_model: str = "deepseek-v4-pro"  # API directa (rapido, 1-3s)
+    loop_model: str = "deepseek-chat"  # API directa DeepSeek (modelo real, rapido)
     heavy_model: str = "anthropic/claude-sonnet-5"
 
     easypanel_deploy_token: str = ""
