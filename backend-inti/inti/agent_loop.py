@@ -592,11 +592,21 @@ class AgentLoop:
                 })
                 return
 
-            messages.append({
-                "role": "assistant",
-                "content": self._make_clean_content(resp.get("content") or "", tool_calls),
-                "tool_calls": tool_calls,
-            })
+            # Para DeepSeek directo (XML, sin function calling nativo), NO usar tool_calls/tool role
+            native_tools = not ("deepseek" in self.model and "deepseek/deepseek" not in self.model)
+
+            if native_tools:
+                messages.append({
+                    "role": "assistant",
+                    "content": self._make_clean_content(resp.get("content") or "", tool_calls),
+                    "tool_calls": tool_calls,
+                })
+            else:
+                # XML-based: solo texto, los resultados de tools van como user
+                messages.append({
+                    "role": "assistant",
+                    "content": self._make_clean_content(resp.get("content") or "", tool_calls),
+                })
 
             # Ejecutar tools: read-only en paralelo, write/run en secuencia
             READ_TOOLS = {"read_file", "list_dir", "git_diff"}
@@ -638,7 +648,10 @@ class AgentLoop:
             if read_tasks:
                 results = await asyncio.gather(*[_run_read(i, tc, n, a) for i, tc, n, a in read_tasks])
                 for idx, tc, result in sorted(results, key=lambda x: x[0]):
-                    messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+                    if native_tools:
+                        messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+                    else:
+                        messages.append({"role": "user", "content": f"[Resultado de {tc['function']['name']}]: {result}"})
 
             # Ejecutar writes/commands en secuencia
             for idx, tc, name, args in write_tasks:
@@ -646,7 +659,10 @@ class AgentLoop:
                 result = await self.execute_tool(name, args)
                 await emit({"event_type": "step.delta", "data": {"text": f"🔧 {name} → {result[:800]}"}})
                 await emit({"event_type": "step.stop", "data": {"index": idx}})
-                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+                if native_tools:
+                    messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+                else:
+                    messages.append({"role": "user", "content": f"[Resultado de {name}]: {result}"})
 
         # Alcanzó max_iterations sin que el modelo cerrara: en vez de rendirse y
         # tirar todo lo investigado (gasta tokens sin entregar), forzar una
